@@ -19,6 +19,7 @@ import com.mikepenz.iconics.utils.sizeDp
 import com.osfans.trime.daemon.RimeDaemon
 import com.osfans.trime.data.prefs.AppPrefs
 import com.osfans.trime.data.theme.FontManager
+import com.osfans.trime.data.voice.VoiceTriggerMode
 import com.osfans.trime.ime.core.TrimeInputMethodService
 import com.osfans.trime.ime.popup.PopupAction
 import com.osfans.trime.ime.popup.PopupDelegate
@@ -42,6 +43,12 @@ class KeyView(
         get() = keyboardView.popup
 
     private val rime get() = RimeDaemon.getFirstSessionOrNull()!!
+
+    private val voicePrefs = AppPrefs.defaultInstance().voice
+
+    private fun isVoiceHoldAction(action: KeyAction?): Boolean = action?.code == KeyEvent.KEYCODE_VOICE_ASSIST &&
+        voicePrefs.enabled.getValue() &&
+        voicePrefs.triggerMode.getValue() == VoiceTriggerMode.HOLD
 
     private val deletedTextBuffer = ArrayDeque<String>()
 
@@ -92,7 +99,11 @@ class KeyView(
 
         onRelease = { behavior, isFromLongPress ->
             Timber.d("KeyView release: label=${key.getLabel()}, behavior=$behavior, fromLongPress=$isFromLongPress")
-            if (isFromLongPress) {
+            if (isFromLongPress && keyboardActionListener.voiceInput.isHolding()) {
+                keyboardActionListener.voiceInput.finishHold()
+                setPressedState(false)
+                dismissPopupPreview()
+            } else if (isFromLongPress) {
                 if (hasPopup) {
                     val triggerAction = PopupAction.TriggerAction(id)
                     popup.listener.onPopupAction(triggerAction)
@@ -156,11 +167,14 @@ class KeyView(
         }
 
         onLongClick = {
-            if (key.popup.isNotEmpty()) {
+            val longPressAction = key.getAction(KeyBehavior.LONG_CLICK)
+            if (isVoiceHoldAction(longPressAction)) {
+                keyboardActionListener.voiceInput.startHold()
+            } else if (key.popup.isNotEmpty()) {
                 dismissPopupPreview()
                 showPopupKeyboard()
             } else if (hasLongPress) {
-                key.getAction(KeyBehavior.LONG_CLICK)?.let {
+                longPressAction?.let {
                     processKeyAction(it, KeyBehavior.LONG_CLICK)
                     setPressedState(false)
                     dismissPopupPreview()
@@ -169,12 +183,15 @@ class KeyView(
         }
 
         onMove = { x, y, isLongPress ->
-            if (isLongPress && hasPopup) {
+            if (isLongPress && keyboardActionListener.voiceInput.isHolding()) {
+                keyboardActionListener.voiceInput.onHoldMove(y)
+            } else if (isLongPress && hasPopup) {
                 popup.listener.onPopupAction(PopupAction.ChangeFocusAction(id, x, y))
             }
         }
 
         onCancel = {
+            keyboardActionListener.voiceInput.cancelHoldIfRunning()
             deletedTextBuffer.clear()
             setPressedState(false)
             dismissPopupPreview()

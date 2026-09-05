@@ -27,6 +27,7 @@ import com.osfans.trime.ime.dialog.EnabledSchemaPickerDialog
 import com.osfans.trime.ime.switches.SwitchOptionWindow
 import com.osfans.trime.ime.symbol.LiquidData
 import com.osfans.trime.ime.symbol.LiquidWindow
+import com.osfans.trime.ime.voice.VoiceInputDelegate
 import com.osfans.trime.ime.window.BoardWindowManager
 import com.osfans.trime.ui.main.settings.ColorPickerDialog
 import com.osfans.trime.ui.main.settings.SoundEffectPickerDialog
@@ -54,6 +55,7 @@ class CommonKeyboardActionListener(override val di: DI) : DIAware {
     private val windowManager: BoardWindowManager by instance()
     private val keyboardWindow: KeyboardWindow by instance()
     private val liquidWindow: LiquidWindow by instance()
+    private val voice: VoiceInputDelegate by instance()
 
     private val prefs = AppPrefs.defaultInstance()
 
@@ -110,6 +112,8 @@ class CommonKeyboardActionListener(override val di: DI) : DIAware {
 
     val listener by lazy {
         object : KeyboardActionListener {
+            override val voiceInput: VoiceInputDelegate get() = voice
+
             override fun onPress(keyEventCode: Int) {
                 InputFeedbackManager.run {
                     keyPressSound(keyEventCode)
@@ -140,7 +144,16 @@ class CommonKeyboardActionListener(override val di: DI) : DIAware {
                         KeyEvent.KEYCODE_SETTINGS -> handleSettings(action)
                         KeyEvent.KEYCODE_PROG_RED -> showColorPicker()
                         KeyEvent.KEYCODE_MENU -> showEnabledSchemaPicker()
-                        KeyEvent.KEYCODE_VOICE_ASSIST -> switchToVoiceInputMethod()
+                        KeyEvent.KEYCODE_VOICE_ASSIST -> {
+                            if (prefs.voice.enabled.getValue()) {
+                                // Toolbar button and any non-hold binding always behave as a
+                                // toggle; hold-to-talk is driven by KeyView's long-press path
+                                // instead (see KeyView.kt / VoiceInputDelegate.startHold).
+                                voice.onVoiceActionTriggered(forceToggle = true)
+                            } else {
+                                switchToVoiceInputMethod()
+                            }
+                        }
                         else -> handleDefaultKeyAction(action)
                     }
                 }

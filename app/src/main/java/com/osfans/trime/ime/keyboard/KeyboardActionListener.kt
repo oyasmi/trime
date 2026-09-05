@@ -5,7 +5,16 @@
 
 package com.osfans.trime.ime.keyboard
 
+import com.osfans.trime.ime.voice.VoiceInputDelegate
+
 interface KeyboardActionListener {
+    /**
+     * Lets `KeyView`'s hold-to-talk gesture reach the DI-bound voice input delegate without
+     * threading a new constructor parameter through `KeyboardView`/`KeyboardWindow` — this
+     * interface is the one thing already passed all the way down to `KeyView`.
+     */
+    val voiceInput: VoiceInputDelegate
+
     /**
      * Called when the user presses a key. This is sent before the [.onKey] is called. For
      * keys that repeat, this is only called once.
