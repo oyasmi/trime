@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="review.VoiceReviewProbeTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-05T14:26:50.460Z" hostname="1e070b511ac8" time="4.58">
+  <properties/>
+  <testcase name="synchronous decode blocks session dispatcher and delays queued UI work" classname="review.VoiceReviewProbeTest" time="0.265"/>
+  <testcase name="withTimeout cannot impose a wall clock cap on synchronous work" classname="review.VoiceReviewProbeTest" time="0.255"/>
+  <testcase name="recorder exception escapes and leaves session busy" classname="review.VoiceReviewProbeTest" time="0.003"/>
+  <testcase name="failed model replacement leaves a mixed installation" classname="review.VoiceReviewProbeTest" time="0.004"/>
+  <testcase name="read timeout allows a slowly delivered correction to exceed configured timeout" classname="review.VoiceReviewProbeTest" time="4.049"/>
+  <system-out><![CDATA[REVIEW dispatcher=review-ui heartbeatDelayedMs=256
+REVIEW timeoutBudgetMs=50 actualMs=251
+REVIEW recorderExceptionEscaped=true sessionStillBusy=true
+REVIEW archiveFailed=true installedModel=new installedTokens=old bothNonempty=true
+REVIEW llmTimeoutMs=1000 actualMs=2022
+REVIEW llmCancelAndJoinMs=1821
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
