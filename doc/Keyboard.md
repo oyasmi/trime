@@ -59,3 +59,23 @@ patch:
 以上例子代表：
 直屏時使用 `my_keyboard` 
 橫屏時使用 `my_landscape_keyboard`，並且不做自動分割。若 `landscape_split_percent` > 0，則會分割顯示。
+
+# 语音输入键位绑定
+
+需先在「设置 → 语音输入」中开启功能并下载识别模型。把任意键位的 `send`（点按或长按）绑定为 `VOICE_ASSIST` 即可：
+
+```yaml
+space:
+  click: space
+  long_click: { send: VOICE_ASSIST }  # 长按空格触发"按住说话"
+```
+
+工具栏按钮同样支持，把按钮的 `action` 指向 `VOICE_ASSIST` 即可：
+
+```yaml
+toolbar:
+  buttons:
+    - { action: VOICE_ASSIST, click: VOICE_ASSIST }
+```
+
+交互方式（按住说话 / 点按切换）在「设置 → 语音输入 → 触发方式」中配置，与键位绑定无关——同一个键位在两种模式下行为不同：按住说话模式下需要真正按住并长按触发；点按切换模式下点一下开始、再点一下结束。

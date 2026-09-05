@@ -34,6 +34,17 @@ Trime is originally a frontend of open-source [Android Traditional Chinese IME],
 
 - Configurations [rimerc](https://github.com/Bambooin/rimerc)
 
+## Voice Input
+
+Trime has built-in, fully offline local voice input based on [SenseVoice-Small](https://github.com/FunAudioLLM/SenseVoice) (via [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)), disabled by default.
+
+- Enable it and download a recognition model (~160-170MB, two variants to choose from) under "Settings → Voice Input", then bind any key's `send` to `VOICE_ASSIST` in your theme (long-pressing space is bound by default, or use the toolbar microphone button). Hold to talk, release to recognize, slide up to cancel.
+- Recognition runs entirely on-device — no network access, no audio upload.
+- An optional "AI correction" feature can post-process the recognized text through an OpenAI-compatible endpoint you configure yourself (Base URL / API key / model); it is **disabled by default**, and enabling it means the recognized text is sent to your configured server.
+- Package size: bundling sherpa-onnx's on-device inference library adds a few MB per architecture (see [`doc/voice-input-design.md`](doc/voice-input-design.md) for exact figures); the recognition model itself is not bundled and must be downloaded separately.
+
+See [`doc/voice-input-design.md`](doc/voice-input-design.md) and [`doc/voice-input-implementation-plan.md`](doc/voice-input-implementation-plan.md) for design and implementation details.
+
 ## History
 
 TRIME is the abbreviation of _Tongwen RIME_ or _ThaeRv Input Method_.
@@ -157,6 +168,8 @@ Other issues:
 - [utfcpp](https://github.com/nemtrif/utfcpp) (Boost Software License)
 - [yaml-cpp](https://github.com/jbeder/yaml-cpp) (MIT License)
 - [Android Traditional Chinese IME](https://code.google.com/p/android-traditional-chinese-ime/) (Apache License 2.0)
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache License 2.0) — local speech recognition runtime for voice input
+- Powered by [SenseVoice-Small](https://github.com/FunAudioLLM/SenseVoice) ([FunAudioLLM](https://github.com/FunAudioLLM)); model weights are licensed under the [FunASR Model Open Source License Agreement](https://github.com/modelscope/FunASR/blob/main/MODEL_LICENSE)
 
 [Android Traditional Chinese IME]: https://code.google.com/p/android-traditional-chinese-ime/
 [RIME]: http://rime.im

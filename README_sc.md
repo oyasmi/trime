@@ -32,6 +32,17 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 - 配置文档 [rimerc](https://github.com/Bambooin/rimerc)
 
+## 语音输入
+
+同文内置了基于 [SenseVoice-Small](https://github.com/FunAudioLLM/SenseVoice)（经 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 运行）的本地语音输入，全程离线，默认关闭。
+
+- 在「设置 → 语音输入」中开启并下载识别模型（约 160-170MB，二选一版本），随后在主题里把任意键位的 `send` 绑定为 `VOICE_ASSIST`（默认长按空格即可，或工具栏麦克风按钮），按住说话、松开识别、上滑取消。
+- 语音识别完全在本机进行，不联网、不上传录音。
+- 可选的「智能校对」功能会用你自行配置的 OpenAI 兼容接口（Base URL / API Key / 模型）对识别文本做一次修正，**默认关闭**；开启后，识别出的文本会发送到你配置的服务端。
+- 安装包体积：由于内置了 sherpa-onnx 的本地推理库，各架构的安装包会增大数 MB（具体数字见 [`doc/voice-input-design.md`](doc/voice-input-design.md)）；识别模型本身不随安装包分发，需要另行下载。
+
+设计与实现细节见 [`doc/voice-input-design.md`](doc/voice-input-design.md) 与 [`doc/voice-input-implementation-plan.md`](doc/voice-input-implementation-plan.md)。
+
 ## 沿革
 
 TRIME 是 Tongwen RIME 或是 ThaeRvInputMEthod 的缩写:
@@ -152,6 +163,8 @@ Target "boost_log_setup" links to target "Boost::coroutine" but the target was n
 - [utfcpp](https://github.com/nemtrif/utfcpp) (Boost Software License)
 - [yaml-cpp](https://github.com/jbeder/yaml-cpp) (MIT License)
 - [注音仓颉输入法](https://code.google.com/p/android-traditional-chinese-ime/) (Apache License 2.0)
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache License 2.0) —— 语音输入本地识别引擎
+- Powered by [SenseVoice-Small](https://github.com/FunAudioLLM/SenseVoice)（[FunAudioLLM](https://github.com/FunAudioLLM)），模型权重适用 [FunASR Model Open Source License Agreement](https://github.com/modelscope/FunASR/blob/main/MODEL_LICENSE)
 
 [注音仓颉输入法]: https://code.google.com/p/android-traditional-chinese-ime/
 [RIME]: http://rime.im
