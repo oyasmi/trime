@@ -88,6 +88,11 @@ class MainFragment : PaddingPreferenceFragment() {
                     NavigationRoute.Clipboard,
                 )
                 addDestinationPreference(
+                    R.string.voice_input,
+                    R.drawable.ic_baseline_mic_24,
+                    NavigationRoute.VoiceInput,
+                )
+                addDestinationPreference(
                     R.string.advanced,
                     R.drawable.ic_baseline_more_horiz_24,
                     NavigationRoute.Advanced,
