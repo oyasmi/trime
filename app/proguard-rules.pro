@@ -11,6 +11,11 @@
 # Keep JNI interface
 -keep class com.osfans.trime.core.* { *; }
 
+# sherpa-onnx (local voice input / SenseVoice): its Kotlin data classes are read/written by name
+# from native (JNI) code, not just from our Kotlin call sites, so R8 must not strip/rename fields.
+-keep class com.k2fsa.sherpa.onnx.** { *; }
+-keepclassmembers class com.k2fsa.sherpa.onnx.** { *; }
+
 # remove kotlin null checks
 -assumenosideeffects class kotlin.jvm.internal.Intrinsics {
     static void checkNotNull(...);

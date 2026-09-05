@@ -478,6 +478,9 @@ app/src/main/assets/shared/opencc
 app/boost-*.tar.xz
 app/src/main/jni/boost/
 
+# sherpa-onnx prebuilt AAR (local voice input), fetched by SherpaOnnxPlugin
+app/libs/
+
 # kotlin
 .kotlin
 

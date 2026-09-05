@@ -10,6 +10,7 @@ plugins {
     id("com.osfans.trime.data-checksums")
     id("com.osfans.trime.native-cache-hash")
     id("com.osfans.trime.opencc-data")
+    id("com.osfans.trime.sherpa-onnx")
     alias(libs.plugins.aboutlibraries)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.kotlin.parcelize)
@@ -111,6 +112,17 @@ android {
                     "/kotlin-tooling-metadata.json",
                 )
         }
+        jniLibs {
+            // sherpa-onnx AAR ships native libs we don't use for the local voice input
+            // (SenseVoice) feature: the JVM JNI4 shim, and the pure-C/C++ API libraries
+            // (we only call the Kotlin bindings, which use libsherpa-onnx-jni.so).
+            excludes +=
+                setOf(
+                    "**/libonnxruntime4j_jni.so",
+                    "**/libsherpa-onnx-c-api.so",
+                    "**/libsherpa-onnx-cxx-api.so",
+                )
+        }
     }
 }
 
@@ -170,6 +182,12 @@ dependencies {
     implementation(libs.community.material.typeface) {
         artifact { type = "aar" }
     }
+
+    // Local voice input (SenseVoice via sherpa-onnx). The AAR is fetched by the
+    // `fetchSherpaOnnxAar` task (see SherpaOnnxPlugin) into app/libs/, not committed to git.
+    implementation(fileTree("libs") { include("*.aar") })
+    // tar.bz2 extraction for downloaded/imported SenseVoice model archives.
+    implementation(libs.commons.compress)
 
     // Testing
     testImplementation(libs.junit)

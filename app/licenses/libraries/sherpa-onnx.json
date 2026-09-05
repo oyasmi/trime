@@ -1,0 +1,11 @@
+{
+    "uniqueId": "k2-fsa/sherpa-onnx",
+    "artifactVersion": "1.13.7",
+    "description": "Local speech recognition (SenseVoice) runtime powering Trime's voice input",
+    "name": "k2-fsa/sherpa-onnx",
+    "website": "https://github.com/k2-fsa/sherpa-onnx",
+    "tag": "native",
+    "licenses": [
+        "Apache-2.0"
+    ]
+}

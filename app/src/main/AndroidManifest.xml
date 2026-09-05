@@ -11,6 +11,12 @@ SPDX-License-Identifier: GPL-3.0-or-later
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Local voice input (SenseVoice): recording only starts when the user holds the voice key. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Only used, when the user explicitly enables it, to download the voice model and to send
+         recognized text to a user-configured LLM endpoint for optional AI correction. Disabled
+         by default; see VoicePrefs. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:name="com.osfans.trime.TrimeApplication"

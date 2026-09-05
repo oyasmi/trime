@@ -38,5 +38,9 @@ gradlePlugin {
             id = "com.osfans.trime.opencc-data"
             implementationClass = "OpenCCDataPlugin"
         }
+        register("sherpaOnnx") {
+            id = "com.osfans.trime.sherpa-onnx"
+            implementationClass = "SherpaOnnxPlugin"
+        }
     }
 }
