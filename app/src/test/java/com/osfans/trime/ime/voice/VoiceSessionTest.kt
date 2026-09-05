@@ -297,6 +297,41 @@ class VoiceSessionTest :
             }
         }
 
+        "a recorder that throws leaves the session on Idle, not wedged busy" {
+            runBlocking {
+                val states = mutableListOf<VoiceSessionState>()
+                val focus = FakeAudioFocus()
+                val throwingRecorder =
+                    object : VoiceRecorder {
+                        override fun requestStop() {}
+
+                        override suspend fun record(
+                            maxDurationMs: Long,
+                            onFirstSample: () -> Unit,
+                            onAmplitude: (Float) -> Unit,
+                        ): FloatArray = throw IllegalStateException("record start failed")
+                    }
+                val session =
+                    VoiceSession(
+                        scope = this,
+                        engine = FakeEngine(),
+                        recorder = throwingRecorder,
+                        audioFocus = focus,
+                        correct = { it },
+                        onStateChange = { states += it },
+                        onResult = {},
+                        onMaxDurationReached = {},
+                    )
+
+                session.start(defaultConfig())
+                awaitUntil { states.lastOrNull() is VoiceSessionState.Idle }
+
+                session.isBusy() shouldBe false
+                focus.acquired shouldBe false
+                states.any { it is VoiceSessionState.Error } shouldBe true
+            }
+        }
+
         "an audio failure (null samples) surfaces an error and returns to Idle" {
             runBlocking {
                 val states = mutableListOf<VoiceSessionState>()

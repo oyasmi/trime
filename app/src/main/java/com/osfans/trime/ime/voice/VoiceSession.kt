@@ -9,6 +9,7 @@ import com.osfans.trime.data.voice.RecognitionEngine
 import com.osfans.trime.data.voice.SenseVoiceEngine
 import com.osfans.trime.data.voice.TextPostProcessor
 import com.osfans.trime.data.voice.VoiceModelVariant
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -102,43 +103,62 @@ class VoiceSession(
 
         sessionJob =
             scope.launch {
-                audioFocus.acquire()
-                val samples =
-                    try {
-                        recorder.record(
-                            maxDurationMs = config.maxDurationMs,
-                            onFirstSample = {},
-                            onAmplitude = { amplitude ->
-                                // Called from the recorder's own thread (see `VoiceRecorder`),
-                                // so hop back onto [scope]'s dispatcher — the IME's main thread —
-                                // before touching state, since `onStateChange` renders the
-                                // overlay. Re-read the state inside the launch: by the time it
-                                // runs the session may already have left Recording.
-                                scope.launch {
-                                    val current = state
-                                    if (current is VoiceSessionState.Recording) {
-                                        setState(current.copy(amplitude = amplitude))
-                                    }
-                                }
-                            },
-                        )
-                    } finally {
-                        audioFocus.release()
-                    }
-
-                when (val reason = classifyRecordingOutcome(samples, cancelRequested, config.maxDurationMs)) {
-                    DiscardReason.Cancelled, DiscardReason.TooShort -> setState(VoiceSessionState.Idle)
-                    DiscardReason.AudioFailure -> {
-                        setState(VoiceSessionState.Error(ErrorReason.AudioFailure))
-                        setState(VoiceSessionState.Idle)
-                    }
-                    DiscardReason.ReachedMax -> {
-                        onMaxDurationReached()
-                        recognizeAndMaybeCorrect(samples!!, config)
-                    }
-                    null -> recognizeAndMaybeCorrect(samples!!, config)
+                try {
+                    runSession(config)
+                } catch (c: CancellationException) {
+                    throw c
+                } catch (e: Exception) {
+                    // Anything that escaped acquire → record → decode → correct (a recorder
+                    // IllegalStateException, an audio-focus failure, …) must still land the state
+                    // machine back on Idle — otherwise `isBusy()` stays true forever and the
+                    // feature is wedged until the process restarts. In a bare top-level `launch`
+                    // this catch is also what stops the exception reaching the IME process's
+                    // (absent) uncaught-exception handler. OOM / native crashes are Errors, not
+                    // Exceptions, and are deliberately left to propagate.
+                    Timber.e(e, "Voice session failed unexpectedly")
+                    setState(VoiceSessionState.Error(ErrorReason.AudioFailure))
+                    setState(VoiceSessionState.Idle)
                 }
             }
+    }
+
+    private suspend fun runSession(config: Config) {
+        val samples =
+            try {
+                audioFocus.acquire()
+                recorder.record(
+                    maxDurationMs = config.maxDurationMs,
+                    onFirstSample = {},
+                    onAmplitude = { amplitude ->
+                        // Called from the recorder's own thread (see `VoiceRecorder`), so hop
+                        // back onto [scope]'s dispatcher — the IME's main thread — before
+                        // touching state, since `onStateChange` renders the overlay. Re-read
+                        // the state inside the launch: by the time it runs the session may
+                        // already have left Recording.
+                        scope.launch {
+                            val current = state
+                            if (current is VoiceSessionState.Recording) {
+                                setState(current.copy(amplitude = amplitude))
+                            }
+                        }
+                    },
+                )
+            } finally {
+                audioFocus.release()
+            }
+
+        when (classifyRecordingOutcome(samples, cancelRequested, config.maxDurationMs)) {
+            DiscardReason.Cancelled, DiscardReason.TooShort -> setState(VoiceSessionState.Idle)
+            DiscardReason.AudioFailure -> {
+                setState(VoiceSessionState.Error(ErrorReason.AudioFailure))
+                setState(VoiceSessionState.Idle)
+            }
+            DiscardReason.ReachedMax -> {
+                onMaxDurationReached()
+                recognizeAndMaybeCorrect(samples!!, config)
+            }
+            null -> recognizeAndMaybeCorrect(samples!!, config)
+        }
     }
 
     /** Slide-to-cancel: updates the visible "about to cancel" flag; doesn't stop recording. */

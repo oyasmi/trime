@@ -137,6 +137,27 @@ class VoiceModelArchiveTest :
             threw shouldBe true
         }
 
+        "a wrong archive missing a required file leaves an existing install untouched" {
+            val dest = tempDir()
+            File(dest, "model.int8.onnx").writeText("OLD_MODEL")
+            File(dest, "tokens.txt").writeText("OLD_TOKENS")
+
+            val archive = File(tempDir(), "wrong.zip")
+            writeZip(archive, mapOf("model.int8.onnx" to "NEW_MODEL".toByteArray()))
+
+            var threw = false
+            try {
+                VoiceModelArchive.extract(archive, dest)
+            } catch (e: VoiceModelArchive.ExtractionException) {
+                threw = true
+            }
+
+            threw shouldBe true
+            File(dest, "model.int8.onnx").readText() shouldBe "OLD_MODEL"
+            File(dest, "tokens.txt").readText() shouldBe "OLD_TOKENS"
+            dest.listFiles { f -> f.name.endsWith(".part") }?.isEmpty() shouldBe true
+        }
+
         "throws when a required file is missing from the archive" {
             val archive = File(tempDir(), "incomplete.zip")
             writeZip(archive, mapOf("model.int8.onnx" to "MODEL_BYTES".toByteArray()))

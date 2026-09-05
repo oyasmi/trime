@@ -11,12 +11,14 @@ import com.k2fsa.sherpa.onnx.OfflineModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
 import com.k2fsa.sherpa.onnx.OfflineSenseVoiceModelConfig
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 
@@ -30,6 +32,14 @@ import java.io.File
  *
  * All state is guarded by [mutex]: loading and inference never run concurrently, matching
  * sherpa-onnx's single-threaded-per-recognizer expectation.
+ *
+ * Model construction, the synchronous JNI `decode`, and `release` are all CPU/IO-bound blocking
+ * calls that must never touch the IME's main thread (the caller's `lifecycleScope` runs on
+ * `Dispatchers.Main.immediate`), so every public entry point here hops onto [Dispatchers.Default]
+ * before taking [mutex]. A `withTimeoutOrNull` around [decode] only stops the caller waiting — the
+ * native call keeps running to completion on the background thread and the mutex stays held until
+ * it returns, which is what prevents a timed-out decode from racing a fresh one or an early
+ * `release()`.
  */
 interface RecognitionEngine {
     /** Runs one offline recognition pass over [samples] (mono, 16kHz, range roughly -1..1). */
@@ -89,8 +99,9 @@ class SenseVoiceEngine(
         language: String,
         itn: Boolean,
         numThreads: Int,
-    ) {
+    ) = withContext(Dispatchers.Default) {
         mutex.withLock { ensureLoadedLocked(variant, language, itn, numThreads) }
+        Unit
     }
 
     override suspend fun decode(
@@ -99,24 +110,28 @@ class SenseVoiceEngine(
         language: String,
         itn: Boolean,
         numThreads: Int,
-    ): String = mutex.withLock {
-        val engine = ensureLoadedLocked(variant, language, itn, numThreads)
-        val stream = engine.createStream()
-        try {
-            stream.acceptWaveform(samples, SAMPLE_RATE)
-            engine.decode(stream)
-            engine.getResult(stream).text
-        } finally {
-            stream.release()
+    ): String = withContext(Dispatchers.Default) {
+        mutex.withLock {
+            val engine = ensureLoadedLocked(variant, language, itn, numThreads)
+            val stream = engine.createStream()
+            try {
+                stream.acceptWaveform(samples, SAMPLE_RATE)
+                engine.decode(stream)
+                engine.getResult(stream).text
+            } finally {
+                stream.release()
+            }
         }
     }
 
     override suspend fun unloadNow() {
-        mutex.withLock {
-            recognizer?.release()
-            recognizer = null
-            loadedConfig = null
-            _state.value = State.Unloaded
+        withContext(Dispatchers.Default) {
+            mutex.withLock {
+                recognizer?.release()
+                recognizer = null
+                loadedConfig = null
+                _state.value = State.Unloaded
+            }
         }
     }
 

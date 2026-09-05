@@ -11,6 +11,8 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import com.osfans.trime.data.voice.SenseVoiceEngine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import kotlin.math.sqrt
@@ -56,9 +58,13 @@ class AudioRecorder : VoiceRecorder {
         maxDurationMs: Long,
         onFirstSample: () -> Unit,
         onAmplitude: (Float) -> Unit,
-    ): FloatArray? =
-        withContext(Dispatchers.IO) {
-            stopRequested = false
+    ): FloatArray? {
+        // Clear the stop flag *before* the coroutine possibly suspends on the IO dispatcher. If
+        // this were done inside `withContext(Dispatchers.IO)` and dispatch was slow, a release
+        // that already called `requestStop()` would be silently overwritten and the recording
+        // would run to its full time limit.
+        stopRequested = false
+        return withContext(Dispatchers.IO) {
             val sampleRate = SenseVoiceEngine.SAMPLE_RATE
             val minBufferBytes =
                 AudioRecord.getMinBufferSize(
@@ -90,6 +96,10 @@ class AudioRecorder : VoiceRecorder {
             try {
                 audioRecord.startRecording()
                 while (!stopRequested && writeIndex < maxSamples) {
+                    // Cooperate with coroutine cancellation (`sessionJob.cancel()` on an explicit
+                    // cancel): without this the loop only ever stops on `stopRequested` or the
+                    // time cap, so a cancelled session's microphone stayed open until then.
+                    currentCoroutineContext().ensureActive()
                     val n = audioRecord.read(readBuffer, 0, readBuffer.size)
                     if (n <= 0) break
 
@@ -119,6 +129,7 @@ class AudioRecorder : VoiceRecorder {
 
             samples.copyOf(writeIndex)
         }
+    }
 
     private fun createAudioRecord(
         audioSource: Int,

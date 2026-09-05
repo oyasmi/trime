@@ -101,7 +101,17 @@ class VoiceModelDownloadWorker(
         try {
             report(PHASE_EXTRACT, 0)
             if (VoiceModelManager.sha256(cacheFile) != variant.sha256) {
-                Timber.w("Voice model archive sha256 mismatch for ${variant.name}, extracting anyway")
+                // Every URL for a built-in variant (primary + mirrors) is meant to serve this
+                // exact object, so a hash mismatch means a corrupt download, a wrong/instrumented
+                // mirror, or a bad cross-source resume splice. Extracting it anyway would feed an
+                // unknown model + tokens pair to the native loader; refuse and force a clean
+                // re-download instead. (The user-picked "import archive" path in
+                // VoiceModelManager stays lenient by design — there the user vouches for the file.)
+                Timber.e("Voice model archive sha256 mismatch for ${variant.name}, refusing to install")
+                cacheFile.delete()
+                return@withContext Result.failure(
+                    workDataOf(KEY_ERROR to "downloaded model failed its integrity check"),
+                )
             }
             extract(cacheFile, variant)
             Result.success()

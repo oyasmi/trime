@@ -51,32 +51,45 @@ object VoiceModelArchive {
         destDir: File,
         onProgress: (copiedBytes: Long, entryBytes: Long) -> Unit = { _, _ -> },
     ) {
-        val found = mutableSetOf<String>()
         destDir.mkdirs()
-        openEntries(source) { name, entrySize, input ->
-            val fileName = name.substringAfterLast('/')
-            // fileName is always one of the two fixed WANTED_NAMES constants here (no "/" or
-            // ".." components survive substringAfterLast), so File(destDir, fileName) can never
-            // resolve outside destDir — but assert it anyway as a regression guard.
-            if (fileName in WANTED_NAMES) {
-                val target = File(destDir, fileName)
-                check(target.canonicalFile.parentFile == destDir.canonicalFile) {
-                    "Refusing to extract outside destination: $fileName"
+        // Stage both files as `.part` siblings first and only rename them into place once the
+        // whole archive has been read and both are present. Renaming each file the moment it was
+        // unpacked meant a truncated archive (or a wrong archive missing one of the two files)
+        // left a half-updated install — e.g. a new model.int8.onnx next to the previous
+        // tokens.txt, both non-empty, which passes the "is it installed?" check but is a broken
+        // pairing.
+        val staged = mutableMapOf<String, File>()
+        try {
+            openEntries(source) { name, entrySize, input ->
+                val fileName = name.substringAfterLast('/')
+                // fileName is always one of the two fixed WANTED_NAMES constants here (no "/" or
+                // ".." components survive substringAfterLast), so File(destDir, fileName) can
+                // never resolve outside destDir — but assert it anyway as a regression guard.
+                if (fileName in WANTED_NAMES && fileName !in staged) {
+                    val target = File(destDir, fileName)
+                    check(target.canonicalFile.parentFile == destDir.canonicalFile) {
+                        "Refusing to extract outside destination: $fileName"
+                    }
+                    val tmp = File(destDir, "$fileName.part")
+                    BufferedOutputStream(tmp.outputStream(), BUFFER_SIZE).use { output ->
+                        copyReporting(input, output, entrySize, onProgress)
+                    }
+                    staged[fileName] = tmp
                 }
-                val tmp = File(destDir, "$fileName.part")
-                BufferedOutputStream(tmp.outputStream(), BUFFER_SIZE).use { output ->
-                    copyReporting(input, output, entrySize, onProgress)
-                }
-                if (!tmp.renameTo(target)) {
-                    tmp.delete()
+            }
+            val missing = WANTED_NAMES - staged.keys
+            if (missing.isNotEmpty()) {
+                throw ExtractionException("Archive is missing required file(s): ${missing.joinToString()}")
+            }
+            for ((fileName, tmp) in staged) {
+                if (!tmp.renameTo(File(destDir, fileName))) {
                     throw ExtractionException("Could not move $fileName into place")
                 }
-                found += fileName
             }
-        }
-        val missing = WANTED_NAMES - found
-        if (missing.isNotEmpty()) {
-            throw ExtractionException("Archive is missing required file(s): ${missing.joinToString()}")
+        } finally {
+            // Whatever is left as `.part` is either a failed extraction or a rename that never
+            // happened — never a published file. Clear it so a retry starts clean.
+            staged.values.forEach { runCatching { if (it.exists()) it.delete() } }
         }
     }
 
