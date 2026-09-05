@@ -29,5 +29,13 @@ target_compile_options(
 target_compile_options(
   rime-lua-objs PRIVATE "-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.")
 
+# Vendored Lua's lprefix.h forces _FILE_OFFSET_BITS=64, which on 32-bit
+# Android ABIs (armeabi-v7a/x86) gates fseeko/ftello behind API level 24 in
+# NDK's bionic headers. Our minSdk is 21, so those declarations disappear
+# and the build fails with implicit-function-declaration errors. Pinning
+# the macro to 32 before lprefix.h sees it keeps fseeko/ftello declared
+# unconditionally.
+target_compile_definitions(rime-lua-objs PRIVATE _FILE_OFFSET_BITS=32)
+
 target_compile_options(
   rime-octagram-objs PRIVATE "-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.")
