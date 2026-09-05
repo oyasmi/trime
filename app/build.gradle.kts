@@ -50,6 +50,7 @@ android {
 
     buildTypes {
         release {
+            versionNameSuffix = "-voice"
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

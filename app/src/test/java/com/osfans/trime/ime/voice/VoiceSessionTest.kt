@@ -11,10 +11,13 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.Executors
 
 private val SAMPLE_RATE = com.osfans.trime.data.voice.SenseVoiceEngine.SAMPLE_RATE
 
@@ -36,6 +39,27 @@ private class FakeRecorder(
         onAmplitude: (Float) -> Unit,
     ): FloatArray? {
         if (result != null && result.isNotEmpty()) onFirstSample()
+        return result
+    }
+}
+
+/** Reports amplitudes from a separate thread, the way [AudioRecorder] really does. */
+private class OffThreadAmplitudeRecorder(
+    private val result: FloatArray,
+) : VoiceRecorder {
+    override fun requestStop() = Unit
+
+    override suspend fun record(
+        maxDurationMs: Long,
+        onFirstSample: () -> Unit,
+        onAmplitude: (Float) -> Unit,
+    ): FloatArray {
+        val thread = Thread {
+            onFirstSample()
+            repeat(5) { onAmplitude(0.5f) }
+        }
+        thread.start()
+        thread.join()
         return result
     }
 }
@@ -339,6 +363,43 @@ class VoiceSessionTest :
 
                 states.any { it is VoiceSessionState.Correcting && it.asrText == "原文" } shouldBe true
                 results shouldBe listOf("校对后")
+            }
+        }
+
+        // Regression: the recorder reports amplitudes from its own thread; delivering them to
+        // onStateChange there crashed the IME (the overlay's TextView is main-thread-confined).
+        "amplitude updates are delivered on the session's own dispatcher" {
+            val dispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+            try {
+                runBlocking {
+                    val scope = CoroutineScope(dispatcher + Job())
+                    // Coroutine debug mode appends " @coroutine#N" to the thread name; the
+                    // thread identity is what matters here, not which coroutine is on it.
+                    fun currentThread() = Thread.currentThread().name.substringBefore(" @coroutine#")
+                    val sessionThreadName = withContext(dispatcher) { currentThread() }
+                    val callbackThreads = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+                    val results = mutableListOf<String>()
+                    val session =
+                        VoiceSession(
+                            scope = scope,
+                            engine = FakeEngine(),
+                            recorder = OffThreadAmplitudeRecorder(samplesFor(2000)),
+                            audioFocus = FakeAudioFocus(),
+                            correct = { it },
+                            onStateChange = { callbackThreads += currentThread() },
+                            onResult = { results += it },
+                            onMaxDurationReached = {},
+                        )
+
+                    withContext(dispatcher) { session.start(defaultConfig()) }
+                    awaitUntil { results.isNotEmpty() }
+                    // let any queued amplitude updates drain
+                    withContext(dispatcher) { }
+
+                    callbackThreads shouldBe setOf(sessionThreadName)
+                }
+            } finally {
+                dispatcher.close()
             }
         }
     })

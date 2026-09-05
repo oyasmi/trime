@@ -274,6 +274,11 @@
     <string name="voice_model_status_extracting">Extracting…</string>
     <string name="voice_model_status_ready">Ready (%1$s)</string>
     <string name="voice_model_status_invalid">Invalid: %1$s</string>
+    <string name="voice_model_status_failed">Download failed: %1$s</string>
+    <string name="voice_model_status_failed_unknown">Download failed</string>
+    <string name="voice_model_download_started">Download started — this is about 160 MB</string>
+    <string name="voice_model_download_cancel">Cancel download</string>
+    <string name="voice_model_download_retry">Retry download</string>
     <string name="voice_model_sha256_mismatch_warning">The file\'s checksum doesn\'t match the pinned one, but it looks usable; proceeding anyway.</string>
     <string name="voice_language">Recognition language</string>
     <string name="voice_language_auto">Auto</string>

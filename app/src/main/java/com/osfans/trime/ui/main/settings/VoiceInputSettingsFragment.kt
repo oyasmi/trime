@@ -5,20 +5,26 @@
 
 package com.osfans.trime.ui.main.settings
 
+import android.os.Bundle
+import android.view.View
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.preference.Preference
 import androidx.preference.PreferenceScreen
+import androidx.work.WorkInfo
 import com.osfans.trime.R
 import com.osfans.trime.data.prefs.AppPrefs
 import com.osfans.trime.data.prefs.PreferenceDelegateFragment
 import com.osfans.trime.data.voice.VoiceCorrectionPrompt
+import com.osfans.trime.data.voice.VoiceModelManager
 import com.osfans.trime.util.addPreference
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class VoiceInputSettingsFragment : PreferenceDelegateFragment(AppPrefs.defaultInstance().voice) {
     private val prefs = AppPrefs.defaultInstance().voice
     private var modelPref: Preference? = null
+    private var downloadWork: WorkInfo? = null
 
     override fun onPreferenceUiCreated(screen: PreferenceScreen) {
         screen.findPreference<Preference>(prefs.llmApiKey.key)?.summaryProvider =
@@ -28,7 +34,7 @@ class VoiceInputSettingsFragment : PreferenceDelegateFragment(AppPrefs.defaultIn
             Preference(screen.context).apply {
                 title = getString(R.string.voice_model)
                 setOnPreferenceClickListener {
-                    VoiceModelDialog.show(requireContext(), prefs) { refreshModelSummary() }
+                    VoiceModelDialog.show(requireContext(), prefs, downloadWork) { refreshModelSummary() }
                     true
                 }
             }
@@ -47,19 +53,30 @@ class VoiceInputSettingsFragment : PreferenceDelegateFragment(AppPrefs.defaultIn
     override fun onStart() {
         super.onStart()
         refreshModelSummary()
-        // Cheap polling rather than wiring a full WorkManager LiveData observer here: this
-        // screen is the only place the summary needs to stay live while a download runs.
-        lifecycleScope.launch {
-            while (true) {
-                delay(1000)
-                refreshModelSummary()
+    }
+
+    override fun onViewCreated(
+        view: View,
+        savedInstanceState: Bundle?,
+    ) {
+        super.onViewCreated(view, savedInstanceState)
+        // The download runs in WorkManager, so its progress and its failures only exist there —
+        // observing it is what makes the model row show "Downloading… 12%" and, crucially, say
+        // so when the download gives up instead of silently reading "not installed".
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                VoiceModelManager.workInfoFlow(requireContext()).collect { info ->
+                    downloadWork = info
+                    refreshModelSummary()
+                }
             }
         }
     }
 
     private fun refreshModelSummary() {
         if (!isAdded) return
-        modelPref?.summary = VoiceModelDialog.describeStatus(requireContext(), prefs)
+        val state = VoiceModelManager.statusOf(requireContext(), prefs.modelVariant.getValue(), downloadWork)
+        modelPref?.summary = VoiceModelDialog.describeStatus(requireContext(), state)
     }
 
     private fun maskApiKey(key: String): String {

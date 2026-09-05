@@ -6,13 +6,20 @@
 package com.osfans.trime.data.voice
 
 import android.content.Context
+import androidx.work.BackoffPolicy
+import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import java.io.File
 import java.security.MessageDigest
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
 
 /**
@@ -37,8 +44,8 @@ object VoiceModelManager {
 
     /**
      * Synchronous, disk-only check — cheap enough to call every time the settings screen is
-     * shown. Does not report `Downloading`/`Extracting`; the UI gets those from observing the
-     * WorkManager job directly (see [UNIQUE_WORK_NAME]).
+     * shown. Cannot report `Downloading`/`Extracting`/`Failed`: those live in WorkManager, so
+     * pass a [WorkInfo] from [workInfoFlow] to [statusOf] to see them.
      */
     fun status(
         context: Context,
@@ -52,6 +59,45 @@ object VoiceModelManager {
         if (tokens.length() <= 0L) return VoiceModelState.Invalid("tokens file is empty")
         return VoiceModelState.Ready(readableSize(model.length() + tokens.length()))
     }
+
+    /** The download job's latest state, or `null` if one has never been enqueued. */
+    fun workInfoFlow(context: Context): Flow<WorkInfo?> = WorkManager
+        .getInstance(context)
+        .getWorkInfosForUniqueWorkFlow(UNIQUE_WORK_NAME)
+        .map { infos -> infos.lastOrNull() }
+
+    /**
+     * Full status: what's on disk, overlaid with what the download job is doing. An in-flight or
+     * just-failed job wins over the disk answer — without this the settings screen sat on
+     * "not installed" for the whole download and said nothing at all when it failed.
+     */
+    fun statusOf(
+        context: Context,
+        variant: VoiceModelVariant,
+        work: WorkInfo?,
+    ): VoiceModelState {
+        val onDisk = status(context, variant)
+        if (onDisk is VoiceModelState.Ready) return onDisk
+        return when (work?.state) {
+            WorkInfo.State.ENQUEUED -> VoiceModelState.Downloading(0)
+            WorkInfo.State.RUNNING -> {
+                val percent = work.progress.getInt(VoiceModelDownloadWorker.KEY_PERCENT, 0)
+                val phase = work.progress.getInt(VoiceModelDownloadWorker.KEY_PHASE, VoiceModelDownloadWorker.PHASE_DOWNLOAD)
+                if (phase == VoiceModelDownloadWorker.PHASE_EXTRACT) {
+                    VoiceModelState.Extracting
+                } else {
+                    VoiceModelState.Downloading(percent)
+                }
+            }
+            WorkInfo.State.FAILED ->
+                VoiceModelState.Failed(
+                    work.outputData.getString(VoiceModelDownloadWorker.KEY_ERROR).orEmpty(),
+                )
+            else -> onDisk
+        }
+    }
+
+    fun isDownloading(work: WorkInfo?): Boolean = work?.state == WorkInfo.State.ENQUEUED || work?.state == WorkInfo.State.RUNNING
 
     fun isReady(
         context: Context,
@@ -85,23 +131,33 @@ object VoiceModelManager {
         val shaMismatch: Boolean,
     )
 
+    /**
+     * [urls] are tried in order by the worker, so pass the mirrors along with the primary source
+     * (see `VoicePrefs.effectiveDownloadUrls`).
+     *
+     * `REPLACE`, not `KEEP`: a previous run that has already finished — failed, most likely —
+     * would otherwise make the download button do nothing at all.
+     */
     fun enqueueDownload(
         context: Context,
         variant: VoiceModelVariant,
-        url: String,
+        urls: List<String>,
     ) {
         val request =
             OneTimeWorkRequestBuilder<VoiceModelDownloadWorker>()
+                .setConstraints(
+                    Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build(),
+                ).setBackoffCriteria(BackoffPolicy.LINEAR, 10, TimeUnit.SECONDS)
                 .setInputData(
                     Data
                         .Builder()
                         .putString(VoiceModelDownloadWorker.KEY_VARIANT, variant.name)
-                        .putString(VoiceModelDownloadWorker.KEY_URL, url)
+                        .putStringArray(VoiceModelDownloadWorker.KEY_URLS, urls.toTypedArray())
                         .build(),
                 ).build()
         WorkManager
             .getInstance(context)
-            .enqueueUniqueWork(UNIQUE_WORK_NAME, ExistingWorkPolicy.KEEP, request)
+            .enqueueUniqueWork(UNIQUE_WORK_NAME, ExistingWorkPolicy.REPLACE, request)
     }
 
     fun cancelDownload(context: Context) {

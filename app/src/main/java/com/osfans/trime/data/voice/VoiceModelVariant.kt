@@ -52,7 +52,25 @@ enum class VoiceModelVariant(
     ),
     ;
 
+    /**
+     * The built-in URL first, then the same asset via public GitHub reverse proxies.
+     *
+     * GitHub's release-asset host is frequently unreachable from mainland China networks (the
+     * symptom is a read timeout waiting for response headers, never a connection refusal), which
+     * made the one-and-only-URL download silently unusable there. The proxies serve the identical
+     * object — byte counts match [expectedBytes] — so the pinned sha256 still applies.
+     */
+    val downloadUrls: List<String>
+        get() = listOf(downloadUrl) + GITHUB_PROXY_PREFIXES.map { it + downloadUrl }
+
     companion object {
+        /** Prefixed onto the full `https://github.com/...` URL; see [downloadUrls]. */
+        private val GITHUB_PROXY_PREFIXES =
+            listOf(
+                "https://ghfast.top/",
+                "https://gh-proxy.com/",
+            )
+
         /** File names inside the archive; identical across both variants. */
         const val MODEL_FILE_NAME = "model.int8.onnx"
         const val TOKENS_FILE_NAME = "tokens.txt"

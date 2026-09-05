@@ -22,4 +22,9 @@ sealed interface VoiceModelState {
     data class Invalid(
         val reason: String,
     ) : VoiceModelState
+
+    /** The last download attempt gave up; [reason] is the worker's message, possibly blank. */
+    data class Failed(
+        val reason: String,
+    ) : VoiceModelState
 }

@@ -19,6 +19,9 @@ interface VoiceRecorder {
     fun requestStop()
 
     /**
+     * [onFirstSample] and [onAmplitude] are invoked on the recording thread, *not* the caller's
+     * thread — marshal back yourself before touching anything thread-confined (UI included).
+     *
      * @param onFirstSample invoked once real audio starts flowing — the hardware has ~100-200ms
      *   of start-up latency, and a waveform that animates before that point makes it look like
      *   the app isn't actually listening yet.

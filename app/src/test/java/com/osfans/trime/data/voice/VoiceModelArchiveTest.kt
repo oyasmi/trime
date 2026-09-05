@@ -104,6 +104,39 @@ class VoiceModelArchiveTest :
             dest.parentFile?.listFiles { f -> f.name == "evil" }?.isEmpty() shouldBe true
         }
 
+        "detects the format from magic bytes, not the file name" {
+            // The downloader hands the extractor its own scratch file, whose name ends in
+            // ".part" — trusting the extension made every completed download fail to unpack.
+            val archive = File(tempDir(), "voice_model_V2024_07_17.part")
+            writeTarBz2(
+                archive,
+                mapOf(
+                    "sherpa-onnx-sense-voice-2024/model.int8.onnx" to "MODEL_BYTES".toByteArray(),
+                    "sherpa-onnx-sense-voice-2024/tokens.txt" to "TOKENS_BYTES".toByteArray(),
+                ),
+            )
+            val dest = tempDir()
+
+            VoiceModelArchive.extract(archive, dest)
+
+            File(dest, "model.int8.onnx").readText() shouldBe "MODEL_BYTES"
+            File(dest, "tokens.txt").readText() shouldBe "TOKENS_BYTES"
+        }
+
+        "rejects a file that is neither a zip nor a bzip2 archive" {
+            val archive = File(tempDir(), "model.tar.bz2")
+            archive.writeText("this is not an archive at all")
+            val dest = tempDir()
+
+            var threw = false
+            try {
+                VoiceModelArchive.extract(archive, dest)
+            } catch (e: VoiceModelArchive.ExtractionException) {
+                threw = true
+            }
+            threw shouldBe true
+        }
+
         "throws when a required file is missing from the archive" {
             val archive = File(tempDir(), "incomplete.zip")
             writeZip(archive, mapOf("model.int8.onnx" to "MODEL_BYTES".toByteArray()))

@@ -271,6 +271,11 @@
     <string name="voice_model_status_extracting">解壓中…</string>
     <string name="voice_model_status_ready">已就緒（%1$s）</string>
     <string name="voice_model_status_invalid">無效：%1$s</string>
+    <string name="voice_model_status_failed">下載失敗：%1$s</string>
+    <string name="voice_model_status_failed_unknown">下載失敗</string>
+    <string name="voice_model_download_started">已開始下載，約 160 MB</string>
+    <string name="voice_model_download_cancel">取消下載</string>
+    <string name="voice_model_download_retry">重新下載</string>
     <string name="voice_model_sha256_mismatch_warning">檔案校驗和與內建值不一致，但仍可正常使用，已繼續</string>
     <string name="voice_language">辨識語言</string>
     <string name="voice_language_auto">自動</string>

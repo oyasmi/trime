@@ -27,6 +27,16 @@
     static void checkNotNullParameter(...);
 }
 
+# WorkManager instantiates its built-in InputMerger implementations
+# (OverwritingInputMerger/ArrayCreatingInputMerger) via reflection on every WorkRequest, not just
+# chained ones. The library's own consumer rule only keeps the class (`-keep class * extends
+# androidx.work.InputMerger`), which stops renaming/removal but not shrinking of the no-arg
+# constructor, so R8 strips it and every WorkManager job (voice model download, background sync)
+# fails at runtime with NoSuchMethodException before the worker even starts.
+-keep class * extends androidx.work.InputMerger {
+    public <init>();
+}
+
 # Uncomment this to preserve the line number information for
 # debugging stack traces.
 -keepattributes SourceFile,LineNumberTable

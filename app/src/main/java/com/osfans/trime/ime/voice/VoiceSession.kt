@@ -109,9 +109,16 @@ class VoiceSession(
                             maxDurationMs = config.maxDurationMs,
                             onFirstSample = {},
                             onAmplitude = { amplitude ->
-                                val current = state
-                                if (current is VoiceSessionState.Recording) {
-                                    setState(current.copy(amplitude = amplitude))
+                                // Called from the recorder's own thread (see `VoiceRecorder`),
+                                // so hop back onto [scope]'s dispatcher — the IME's main thread —
+                                // before touching state, since `onStateChange` renders the
+                                // overlay. Re-read the state inside the launch: by the time it
+                                // runs the session may already have left Recording.
+                                scope.launch {
+                                    val current = state
+                                    if (current is VoiceSessionState.Recording) {
+                                        setState(current.copy(amplitude = amplitude))
+                                    }
                                 }
                             },
                         )

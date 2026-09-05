@@ -49,7 +49,7 @@ class VoicePrefs(
      * Overrides the built-in download URL for the currently selected [modelVariant]. Blank
      * (the default) means "use the built-in URL for whichever variant is selected" — this is
      * simpler than trying to keep a per-variant stored URL in sync with [modelVariant], and is
-     * functionally equivalent for the user. See [effectiveDownloadUrl].
+     * functionally equivalent for the user. See [effectiveDownloadUrls].
      */
     val modelUrlOverride = editText(
         R.string.voice_model_url_override,
@@ -58,7 +58,12 @@ class VoicePrefs(
         R.string.voice_model_url_override_summary,
     ) { enabled.getValue() }
 
-    fun effectiveDownloadUrl(variant: VoiceModelVariant): String = modelUrlOverride.getValue().trim().ifEmpty { variant.downloadUrl }
+    /**
+     * The URLs to try, in order. A non-blank override wins outright — if the user named a source
+     * they get that source and nothing else; otherwise the variant's built-in URL plus its
+     * mirrors (see [VoiceModelVariant.downloadUrls]).
+     */
+    fun effectiveDownloadUrls(variant: VoiceModelVariant): List<String> = modelUrlOverride.getValue().trim().let { if (it.isEmpty()) variant.downloadUrls else listOf(it) }
 
     val language = enum(R.string.voice_language, LANGUAGE, VoiceLanguage.AUTO) { enabled.getValue() }
 
