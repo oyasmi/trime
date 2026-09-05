@@ -25,7 +25,9 @@ import kotlin.math.max
 class WaveformView(
     context: Context,
 ) : View(context) {
-    private val barCount = 32
+    // 14 bars fit the 72dp slot in the status strip (14 * 4.5 - 2 = 61dp) and cut the
+    // per-frame draw cost by more than half. See doc/voice-input-feedback-design.md §4.3.
+    private val barCount = 14
     private val history = FloatArray(barCount)
     private var writeIndex = 0
     private var running = false
@@ -35,7 +37,7 @@ class WaveformView(
             style = Paint.Style.FILL
             color = Color.WHITE
         }
-    private val barWidthPx = dp(3).toFloat()
+    private val barWidthPx = dp(2.5f)
     private val barGapPx = dp(2).toFloat()
 
     fun setWaveformColor(
@@ -69,8 +71,10 @@ class WaveformView(
         super.onDraw(canvas)
         if (!running) return
         val centerY = height / 2f
-        val minBarHeight = dp(2).toFloat()
-        val maxBarHeight = height / 2f - dp(4)
+        // Both are half-heights: a bar spans centerY ± value. The old dp(4) headroom was
+        // sized for a full-screen overlay; in a 16dp slot it flattens the waveform to 8dp.
+        val minBarHeight = dp(1).toFloat()
+        val maxBarHeight = height / 2f - dp(1)
         val step = barWidthPx + barGapPx
         val totalWidth = barCount * step - barGapPx
         var x = (width - totalWidth) / 2f
@@ -80,7 +84,16 @@ class WaveformView(
             // from oldest to newest so bars appear to scroll in from the right.
             val amplitude = history[(writeIndex + i) % barCount]
             val barHeight = max(minBarHeight, amplitude * maxBarHeight)
-            canvas.drawRect(x, centerY - barHeight, x + barWidthPx, centerY + barHeight, barPaint)
+            val radius = barWidthPx / 2f
+            canvas.drawRoundRect(
+                x,
+                centerY - barHeight,
+                x + barWidthPx,
+                centerY + barHeight,
+                radius,
+                radius,
+                barPaint,
+            )
             x += step
         }
     }

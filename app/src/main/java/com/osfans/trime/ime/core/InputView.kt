@@ -165,6 +165,17 @@ class InputView(
             return dp(value)
         }
 
+    /**
+     * Height of the voice status strip: exactly the input bar's height, so during recording it
+     * replaces that row pixel for pixel. When the bar is hidden (`keyboard__hide_input_bar`) the
+     * strip lands on the key rows instead, so it's capped there — see
+     * doc/voice-input-feedback-design.md §6.1.
+     */
+    private val voiceStripHeight: Int
+        get() = dp(inputBar.themedHeight).let {
+            if (inputBar.view.visibility == View.VISIBLE) it else minOf(it, dp(48))
+        }
+
     val keyboardView: View
 
     init {
@@ -226,6 +237,18 @@ class InputView(
                         bottomOfParent()
                     },
                 )
+                // Last child of `keyboardView`, so the voice status strip draws above both the
+                // input bar and the board window. `popup.root` is added to InputView *after*
+                // keyboardView and therefore still draws above the strip.
+                // Non-clickable (see VoiceOverlayUi), so touches fall through to the keys —
+                // "hold space to talk" depends on it.
+                add(
+                    voice.root,
+                    lParams(matchParent, voiceStripHeight) {
+                        topOfParent()
+                        centerHorizontally()
+                    },
+                )
             }
 
         updateWindowViewHeightJob =
@@ -252,13 +275,6 @@ class InputView(
             lParams(matchParent, wrapContent) {
                 centerHorizontally()
                 bottomOfParent()
-            },
-        )
-
-        add(
-            voice.root,
-            lParams(matchParent, matchParent) {
-                centerInParent()
             },
         )
 
