@@ -39,7 +39,10 @@ android {
 
     base {
         // https://www.norio.be/blog/archivesBaseName-removed-from-gradle9.html
-        archivesName = "${android.defaultConfig.applicationId}-$buildVersionName"
+        // e.g. com.osfans.trime-3.3.13-3d42f794 (versionName then `git describe`,
+        // which falls back to the short commit hash on branches without tags).
+        archivesName =
+            "${android.defaultConfig.applicationId}-${android.defaultConfig.versionName}-$buildVersionName"
     }
 
     buildFeatures {
