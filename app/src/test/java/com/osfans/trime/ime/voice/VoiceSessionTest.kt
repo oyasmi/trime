@@ -408,6 +408,7 @@ class VoiceSessionTest :
             try {
                 runBlocking {
                     val scope = CoroutineScope(dispatcher + Job())
+
                     // Coroutine debug mode appends " @coroutine#N" to the thread name; the
                     // thread identity is what matters here, not which coroutine is on it.
                     fun currentThread() = Thread.currentThread().name.substringBefore(" @coroutine#")
