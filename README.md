@@ -1,176 +1,133 @@
 <!--
-SPDX-FileCopyrightText: 2015 - 2024 Rime community
+SPDX-FileCopyrightText: 2015 - 2026 Rime community
 
 SPDX-License-Identifier: GPL-3.0-or-later
 -->
 
-# Trime
+# Trime with Local Voice Input
 
-Rime IME for Android
+A fork of [**osfans/trime**](https://github.com/osfans/trime) — the RIME input method for Android — that adds **fully offline voice dictation** to the keyboard.
 
-![build](https://github.com/osfans/trime/actions/workflows/commit-ci.yml/badge.svg?branch=develop)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![GitHub release](https://img.shields.io/github/release/osfans/trime.svg)](https://github.com/osfans/trime/releases)
-[![F-Droid release](https://img.shields.io/f-droid/v/com.osfans.trime.svg)](https://f-droid.org/packages/com.osfans.trime)
-[![Latest build](https://img.shields.io/github/last-commit/osfans/trime.svg)](http://osfans.github.io/trime/)
+[![Upstream](https://img.shields.io/badge/upstream-osfans%2Ftrime-blue)](https://github.com/osfans/trime)
+[![Powered by sherpa-onnx](https://img.shields.io/badge/ASR-sherpa--onnx%20%2B%20SenseVoice-orange)](https://github.com/k2-fsa/sherpa-onnx)
 
 English | [简体中文](README_sc.md) | [繁體中文](README_tc.md)
 
-## About
+## Relationship to the upstream project
 
-Trime is originally a frontend of open-source [Android Traditional Chinese IME], based on [RIME] input method framework and written in Java/Kotlin with JNI. It is designed to protect the native language of various local dialects of Chinese and is a universal shape-based and phonetic-based input method platform.
+Everything Trime does — the [RIME] engine, schemas, themes, user dictionaries, the whole input experience — comes from the upstream project and is **unchanged** here. This fork exists for one reason: to let you dictate into that same keyboard **without sending your voice anywhere**.
 
-[Documentation](https://github.com/osfans/trime/wiki)
+| | |
+| --- | --- |
+| Upstream project | <https://github.com/osfans/trime> |
+| Upstream README (kept verbatim) | [README_upstream.md](README_upstream.md) · [简体中文](README_upstream_sc.md) · [繁體中文](README_upstream_tc.md) |
+| Upstream documentation & wiki | <https://github.com/osfans/trime/wiki> |
+| This fork tracks | upstream `develop` |
 
-## Download
+If you want plain Trime, install it from [F-Droid](https://f-droid.org/packages/com.osfans.trime) or [Google Play](https://play.google.com/store/apps/details?id=com.osfans.trime) — this fork is only worth it if you want the voice feature. **Issues about RIME schemas, themes or general input behaviour belong upstream**; please only open issues here for the voice input.
 
-- Stable Channel <br>
-  [<img alt='Get it on F-Droid' src='https://fdroid.gitlab.io/artwork/badge/get-it-on.png' height='80px'/>](https://f-droid.org/packages/com.osfans.trime)
-  [<img alt='Google Play Download Now' src='https://play.google.com/intl/en_us/badges/images/generic/en_badge_web_generic.png' height='80px'/>](https://play.google.com/store/apps/details?id=com.osfans.trime)
+The fork is deliberately shallow: nearly all new code lives in two new packages, `ime/voice/**` and `data/voice/**`, and only a handful of upstream files are touched (the keyboard action listener, the input view, the settings navigation, the manifest). That is what keeps rebasing onto upstream `develop` cheap.
 
-- Nightly Channel [Download](https://github.com/osfans/trime/releases/tag/nightly)
+## What this fork adds
 
-- Canary Channel [Download](https://github.com/osfans/trime/actions)
+### Local voice input (the main feature)
 
-- Configurations [rimerc](https://github.com/Bambooin/rimerc)
+Hold a key, talk, release — the recognized text is committed straight into whatever you were typing in. Recognition runs **on the device**, through [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) with a [SenseVoice-Small](https://github.com/FunAudioLLM/SenseVoice) model. No network, no audio upload, no second app, no background service, no separate process.
 
-## Voice Input
+- **Offline by construction.** Audio never leaves the device and is never written to disk — it lives in memory for the duration of one utterance and is then dropped. With AI correction off (the default), the feature makes **zero network requests** after the model is downloaded.
+- **Disabled by default.** Nothing is downloaded, no thread runs, no memory is used until you turn it on in Settings.
+- **Idle-unloading engine.** The recognizer is loaded on demand and unloaded after an idle timeout (5 minutes by default; `0` = unload after every utterance, `-1` = keep resident), so an enabled-but-unused voice feature costs essentially nothing.
+- **Languages.** Chinese, English, Cantonese, Japanese, Korean, or automatic detection. Optional inverse text normalization (ITN) produces punctuation and normalized numbers.
+- **In-keyboard feedback.** Recording state, a live waveform and the "listening → recognizing → correcting" progression are drawn as a compact status strip inside the keyboard, not as a full-screen overlay — you keep seeing the app you are dictating into.
+- **Safety rails.** A minimum utterance length rejects accidental taps; a configurable maximum (60 s by default, up to 300 s) wraps up long recordings; password fields refuse voice input; audio focus is released properly so media playback recovers.
 
-Trime has built-in, fully offline local voice input based on [SenseVoice-Small](https://github.com/FunAudioLLM/SenseVoice) (via [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)), disabled by default.
+### Model management
 
-- Enable it and download a recognition model (~160-170MB, two variants to choose from) under "Settings → Voice Input", then bind any key's `send` to `VOICE_ASSIST` in your theme (long-pressing space is bound by default, or use the toolbar microphone button). Hold to talk, release to recognize, slide up to cancel.
-- Recognition runs entirely on-device — no network access, no audio upload.
-- An optional "AI correction" feature can post-process the recognized text through an OpenAI-compatible endpoint you configure yourself (Base URL / API key / model); it is **disabled by default**, and enabling it means the recognized text is sent to your configured server.
-- Package size: bundling sherpa-onnx's on-device inference library adds a few MB per architecture (see [`doc/voice-input-design.md`](doc/voice-input-design.md) for exact figures); the recognition model itself is not bundled and must be downloaded separately.
+- Two SenseVoice-Small int8 variants, both published by sherpa-onnx's own [`asr-models`](https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models) release: **2024-07-17** (produces punctuation — the default) and **2025-09-09** (extra Cantonese training data, no punctuation).
+- Downloads run in the background, survive app restarts, resume, and report progress; the archive's SHA-256 is pinned in-app.
+- GitHub's release-asset host is often unreachable from mainland China, so downloads automatically fall back to public GitHub mirrors — and you can point at your own URL instead.
+- You can also **import a model from a local file** (`.tar.bz2` or `.zip`), or delete an installed one to reclaim the disk space.
 
-See [`doc/voice-input-design.md`](doc/voice-input-design.md) and [`doc/voice-input-implementation-plan.md`](doc/voice-input-implementation-plan.md) for design and implementation details.
+### Optional AI correction — off by default
 
-## History
+Recognized text can optionally be passed through an **OpenAI-compatible chat-completions endpoint** you configure yourself (base URL, API key, model, temperature, timeout, and your own prompt if you want one) to fix homophones, filler words and punctuation.
 
-TRIME is the abbreviation of _Tongwen RIME_ or _ThaeRv Input Method_.
+- **Off by default, and it is the only place in this project that touches the network at dictation time.** Turning it on means the recognized text — not the audio — is sent to the server *you* configured.
+- Any failure, timeout or truncation **falls back to the raw recognized text**; correction can never lose what you said.
+- A "test correction" button in Settings verifies your endpoint at configuration time rather than mid-sentence.
+- Caveat, stated plainly: the API key is stored in ordinary app preferences, not in a hardware keystore.
 
-From the beginning, TRIME was written for TaeRv Pinyin, and named _TaeRv Input Method (泰如输入法)_.
+### Build fixes carried along
 
-Then, we created an input method platform with some code tables, such as Wu dialect (吴语). We renamed it to _Chinese Character Dialect Input Method (汉字方言输入法)_.
+- `_FILE_OFFSET_BITS=32` pinned for rime-lua so 32-bit Android ABIs build again.
+- Release APK archives are named with the version, which makes local release builds easier to keep track of.
 
-Later, it supports Wubi and Liangbi and other shape-based input method, we branded it [_Tongwen Input Method Platform 2.0 (同文输入法平台 2.0)_](https://github.com/osfans/trime-legacy), which implies that the phonetic-based and shape-based input method on one platform, while dialects and Mandrain share one kind of characters.
+## Getting started with voice input
 
-Benefit from the [librime](https://github.com/rime/librime) project by JNI, we are now in version 3.0 of TRIME aka _Tongwen Input Method (同文输入法)_.
+1. **Enable it**: Settings → **Voice Input** → turn on.
+2. **Download a model** on the same screen (~160 MB). Or import one you already have.
+3. **Grant the microphone permission** when prompted.
+4. **Use it**: in the default theme, **long-press the space bar**. The toolbar microphone button works too.
+   Hold to talk, release to recognize, **slide up to cancel**. Prefer tapping? Settings → Voice Input → *Trigger mode* → *Tap to toggle*.
 
-Your are now welcome to [contribution](CONTRIBUTING.md) ~ !
+Any key can trigger it — bind its `send` to `VOICE_ASSIST` in your theme:
 
-## Getting Started for developer
+```yaml
+space:
+  click: space
+  long_click: { send: VOICE_ASSIST }
+```
 
-### Prepare
+See [`doc/Keyboard.md`](doc/Keyboard.md) for the binding details.
 
-#### Requirements:
+> When voice input is **disabled**, the voice key behaves exactly as upstream does: it hands off to your system voice IME.
 
-- Android SDK and Android NDK
-  * If you are new to Android development, please install [Android Studio](https://developer.android.com/studio).
+### The cost, honestly
 
-- JDK (OpenJDK) 17
-- Python 3 (required by OpenCC to generate dictionary text files)
+Bundling sherpa-onnx's inference runtime enlarges the installed app by roughly **25 MB on arm64-v8a** and **18 MB on armeabi-v7a** (uncompressed native libraries; the download increment is smaller). The recognition model is **not** bundled — it is that separate ~160 MB download, stored in the app's external files directory.
 
-#### Prerequisites for Windows
+### Design documents
 
-Symbolic links will be created according to current build configurations, developers need:
+The feature was designed before it was written, and the documents are in the repo:
 
-- Enable [Developer Mode](https://learn.microsoft.com/en-us/windows/apps/get-started/enable-your-device-for-development) so that symlinks can be created without administrator privilege.
+- [`doc/voice-input/voice-input-design.md`](doc/voice-input/voice-input-design.md) — goals, non-goals, technology choices, threat model
+- [`doc/voice-input/voice-input-implementation-plan.md`](doc/voice-input/voice-input-implementation-plan.md) — task breakdown
+- [`doc/voice-input/voice-input-feedback-design.md`](doc/voice-input/voice-input-feedback-design.md) — the in-keyboard status strip
+- [`doc/voice-input/voice-input-review-2026-09-05.md`](doc/voice-input/voice-input-review-2026-09-05.md) — design & implementation review
 
-- Enable symlink support for `git`:
+## Building
 
-  ```powershell
-  git config --global core.symlinks true
-  ```
-
-If you cannot or wouldn't like to enable anything, it doesn't matter. Copying will be used instead when error on creating symbolic links.
-
-### Build
-
-#### 1. Clone this project and fetch all submodules:
+Same as upstream (see [README_upstream.md](README_upstream.md) for requirements and troubleshooting), with this repo's URL:
 
 ```sh
-git clone git@github.com:osfans/trime.git
-git submodule update --init --recursive
-# use partial clone to save time
+git clone git@github.com:oyasmi/trime.git
+cd trime
 git submodule update --init --recursive --filter=blob:none
+
+make debug      # Linux/macOS;  .\gradlew assembleDebug on Windows
 ```
 
-#### 2. Debug version without signature:
-
-```sh
-# On Linux or macOS
-make debug
-
-# On Windows
-.\gradlew assembleDebug
-```
-
-#### 3. Release version with signture:
-
-Create `keystore.properties` file which contains following contents for [signing information](https://developer.android.com/studio/publish/app-signing.html):
-
-```gradle.properties
-storePassword=myStorePassword
-keyPassword=mykeyPassword
-keyAlias=myKeyAlias
-storeFile=myStoreFileLocation
-```
-
-Then, you may run:
-
-```sh
-# On Linux or macOS
-make release
-
-# On Windows
-.\gradlew assembleRelease
-```
-
-### Troubleshooting
-
-```
-Target "boost_log_setup" links to target "Boost::coroutine" but the target was not found.
-```
-
-Run `make clean` on Linux or macOS, or run `.\gradlew clean` on Windows.
-
-Other issues:
-
-1. Try `make clean`
-2. Make sure your repo is up-to-date. If one or more submodules are modified, also make sure they are compatible with the current version.
-3. If the problem still exists(very unlikely), try to make a new clone.
-4. Check if this is there is an issue/PR related to your problem. If yes, try their solutions.
-5. If none of them works, you may make an issue to ask for help.(optional)
+The sherpa-onnx AAR is **not** committed to git. A Gradle plugin (`build-logic/.../SherpaOnnxPlugin.kt`) downloads the pinned release, verifies its SHA-256, and extracts it into `app/libs/` on first build — the same pattern upstream uses for its OpenCC data.
 
 ## Acknowledgments
 
-- Developer: [osfans](https://github.com/osfans)
-- Contributors: [boboIqiqi](https://github.com/boboIqiqi)、[Bambooin](https://github.com/Bambooin)、[senchi96](https://github.com/senchi96)、[heiher](https://github.com/heiher)、[abay](https://github.com/a342191555)、[iovxw](https://github.com/iovxw)、[huyz-git](https://github.com/huyz-git)、[tumuyan](https://github.com/tumuyan)、[WhiredPlanck](https://github.com/WhiredPlanck)、[nopdan](https://github.com/nopdan)...
-- [Wiki Editors](https://github.com/osfans/trime/wiki): [xiaoqun2016](https://github.com/xiaoqun2016)、[boboIqiqi](https://github.com/boboIqiqi)...
-- Translators: 天真可爱的满满 (Chinese Traditional), 点解 (English) ...
-- Keyboard Designers: 天真可爱的满满、皛筱晓小笨鱼、吴琛 11、熊猫阿 Bo、默默ㄇㄛ ˋ...
-- Donations: See QR Code in [Releases](https://github.com/osfans/trime/releases)
-- Community: Netizens who feedback in [Issues](https://github.com/osfans/trime/issues)、[QQ Group (811142286)](https://jq.qq.com/?_wv=1027&k=AXdR80HN)、[QQ Group (224230445)](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=pg_q7UVumWYLq1Rk8kIAqkK1xGt64VnX&authKey=04m9l7OBO5H5vgrEL8IbpsmtnptWM60xy%2FUwYCfyvw9VcRhe8zRzAS1ezoemZdFr&noverify=0&group_code=224230445)、[Tieba](http://tieba.baidu.com/f?kw=rime)、[Google Play](https://play.google.com/store/apps/details?id=com.osfans.trime)、[Telegram](https://t.me/trime_dev)...
-- Projects: [RIME]、[OpenCC]、[Android Traditional Chinese IME] and so on.
+- **[osfans/trime](https://github.com/osfans/trime)** and every one of its contributors — this fork is their work plus one feature. See [README_upstream.md](README_upstream.md#acknowledgments) for the full credits.
+- **[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)** by [k2-fsa](https://github.com/k2-fsa) — the on-device speech recognition runtime that makes offline dictation possible, and the source of the prebuilt Android AAR and the model releases used here. The voice feature would not exist without it.
+- **[SenseVoice](https://github.com/FunAudioLLM/SenseVoice)** by [FunAudioLLM](https://github.com/FunAudioLLM) — the recognition model.
+- **[RIME]** and **[OpenCC]** — the foundations Trime itself is built on.
 
-## Third Party Libraries
+## Third-party libraries
 
-- [Boost C++ Libraries](https://www.boost.org/) (Boost Software License)
-- [darts-clone](https://github.com/s-yata/darts-clone) (New BSD License)
-- [LevelDB](https://github.com/google/leveldb) (New BSD License)
-- [libiconv](https://www.gnu.org/software/libiconv/) (LGPL License)
-- [marisa-trie](https://github.com/s-yata/marisa-trie) (BSD License)
-- [glog](https://github.com/google/glog) (New BSD License)
-- [OpenCC](https://github.com/BYVoid/OpenCC) (Apache License 2.0)
-- [RIME](https://rime.im) (BSD License)
-- [snappy](https://github.com/google/snappy)(BSD License)
-- [utfcpp](https://github.com/nemtrif/utfcpp) (Boost Software License)
-- [yaml-cpp](https://github.com/jbeder/yaml-cpp) (MIT License)
-- [Android Traditional Chinese IME](https://code.google.com/p/android-traditional-chinese-ime/) (Apache License 2.0)
-- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache License 2.0) — local speech recognition runtime for voice input
-- Powered by [SenseVoice-Small](https://github.com/FunAudioLLM/SenseVoice) ([FunAudioLLM](https://github.com/FunAudioLLM)); model weights are licensed under the [FunASR Model Open Source License Agreement](https://github.com/modelscope/FunASR/blob/main/MODEL_LICENSE)
+Everything listed in [README_upstream.md](README_upstream.md#third-party-libraries), plus:
 
-[Android Traditional Chinese IME]: https://code.google.com/p/android-traditional-chinese-ime/
-[RIME]: http://rime.im
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache License 2.0) — on-device speech recognition runtime, including its bundled [ONNX Runtime](https://github.com/microsoft/onnxruntime) (MIT License)
+- [SenseVoice-Small](https://github.com/FunAudioLLM/SenseVoice) — model weights, under the [FunASR Model Open Source License Agreement](https://github.com/modelscope/FunASR/blob/main/MODEL_LICENSE)
+- [Apache Commons Compress](https://commons.apache.org/proper/commons-compress/) (Apache License 2.0) — model archive extraction
+
+## License
+
+GPL-3.0-or-later, unchanged from upstream. See [LICENSE](LICENSE) and [PRIVACY.md](PRIVACY.md).
+
+[RIME]: https://rime.im
 [OpenCC]: https://github.com/BYVoid/OpenCC

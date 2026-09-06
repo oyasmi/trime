@@ -1,171 +1,133 @@
 <!--
-SPDX-FileCopyrightText: 2015 - 2024 Rime community
+SPDX-FileCopyrightText: 2015 - 2026 Rime community
 
 SPDX-License-Identifier: GPL-3.0-or-later
 -->
 
-# 同文 Android 输入法平台
+# 同文输入法 · 本地语音输入版
 
-![build](https://github.com/osfans/trime/actions/workflows/commit-ci.yml/badge.svg?branch=develop)
+这是 [**osfans/trime**](https://github.com/osfans/trime)（同文输入法，Android 上的 RIME 输入法）的一个 fork，在其基础上加入了**完全离线的语音输入**。
+
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![GitHub release](https://img.shields.io/github/release/osfans/trime.svg)](https://github.com/osfans/trime/releases)
-[![F-Droid release](https://img.shields.io/f-droid/v/com.osfans.trime.svg)](https://f-droid.org/packages/com.osfans.trime)
-[![Latest build](https://img.shields.io/github/last-commit/osfans/trime.svg)](http://osfans.github.io/trime/)
+[![Upstream](https://img.shields.io/badge/上游-osfans%2Ftrime-blue)](https://github.com/osfans/trime)
+[![Powered by sherpa-onnx](https://img.shields.io/badge/语音识别-sherpa--onnx%20%2B%20SenseVoice-orange)](https://github.com/k2-fsa/sherpa-onnx)
 
 [English](README.md) | 简体中文 | [繁體中文](README_tc.md)
 
-## 关于
+## 与原项目的关系
 
-源于开源的[注音仓颉输入法]前端，基于著名的 [RIME] 输入法框架，使用 JNI 的 C 语言和 Android 的 Java/Kotlin 语言书写，旨在保护汉语各地方言母语，音码、形码通用的输入法平台。
+同文输入法的一切——[RIME] 引擎、方案、主题、用户词典、整套输入体验——都来自上游项目，本 fork **没有改动**。做这个 fork 只为一件事：让你能对着同一个键盘说话打字，而**声音不出手机**。
 
-[查看文档](https://github.com/osfans/trime/wiki)
+| | |
+| --- | --- |
+| 原项目 | <https://github.com/osfans/trime> |
+| 原项目 README（原样保留） | [README_upstream_sc.md](README_upstream_sc.md) · [English](README_upstream.md) · [繁體中文](README_upstream_tc.md) |
+| 原项目文档与 Wiki | <https://github.com/osfans/trime/wiki> |
+| 本 fork 跟随 | 上游 `develop` 分支 |
 
-## 下载
+如果你只想要原版同文，请直接从 [F-Droid](https://f-droid.org/packages/com.osfans.trime) 或 [Google Play](https://play.google.com/store/apps/details?id=com.osfans.trime) 安装——只有当你需要语音输入时，这个 fork 才有意义。**关于 RIME 方案、主题、通用输入行为的问题请去上游反馈**；本仓库的 issue 请只用于语音输入相关问题。
 
-- 稳定版 <br>
-  [<img alt='Get it on F-Droid' src='https://fdroid.gitlab.io/artwork/badge/get-it-on.png' height='80px'/>](https://f-droid.org/packages/com.osfans.trime)
-  [<img alt='Google Play 立即下载' src='https://play.google.com/intl/en_us/badges/images/generic/zh-cn_badge_web_generic.png' height='80px'/>](https://play.google.com/store/apps/details?id=com.osfans.trime)
+这个 fork 有意做得很浅：新增代码几乎全部落在 `ime/voice/**` 与 `data/voice/**` 两个新包里，被改动的上游文件只有寥寥数个（键盘事件监听、输入视图、设置页导航、manifest）。正因如此，跟随上游 `develop` 变基的成本很低。
 
-- 每夜版 [点击下载](https://github.com/osfans/trime/releases/tag/nightly)
+## 本项目新增了什么
 
-- 测试版 [点击下载](https://github.com/osfans/trime/actions)
+### 本地语音输入（核心功能）
 
-- 配置文档 [rimerc](https://github.com/Bambooin/rimerc)
+按住某个键、说话、松手，识别出的文字直接上屏到你正在输入的地方。识别全程在**本机**完成，底层是 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 运行 [SenseVoice-Small](https://github.com/FunAudioLLM/SenseVoice) 模型。不联网、不上传录音、不装第二个 App、没有后台服务、没有独立进程。
 
-## 语音输入
+- **离线是结构性的。** 录音不出本机，也不落磁盘——它只在一次说话期间存在于内存里，随后被丢弃。在「智能校对」关闭（默认）的情况下，模型下载完成之后，本功能**不会发起任何网络请求**。
+- **默认关闭。** 你不去设置里打开它，就不会下载任何东西，不起线程、不占内存。
+- **空闲自动卸载。** 识别引擎按需加载，空闲一段时间后自动卸载（默认 5 分钟；`0` = 用完即卸，`-1` = 常驻），所以「开启但没在用」的语音功能几乎不产生常驻开销。
+- **多语言。** 中文、英语、粤语、日语、韩语，或自动识别。可选的反向文本正则化（ITN）会输出标点与规范化数字。
+- **反馈收在键盘内。** 录音状态、实时波形、以及「正在聆听 → 识别中 → 校对中」的过程，都画成键盘内的一条状态行，而不是盖住整屏的浮层——你始终看得见正在输入的那个 App。
+- **防呆与兜底。** 过短的按压被判为误触而丢弃；单段录音有可配置的时长上限（默认 60 秒，最长 300 秒）并主动收尾；密码框拒绝语音输入；音频焦点会正确归还，媒体播放能恢复。
 
-同文内置了基于 [SenseVoice-Small](https://github.com/FunAudioLLM/SenseVoice)（经 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 运行）的本地语音输入，全程离线，默认关闭。
+### 模型管理
 
-- 在「设置 → 语音输入」中开启并下载识别模型（约 160-170MB，二选一版本），随后在主题里把任意键位的 `send` 绑定为 `VOICE_ASSIST`（默认长按空格即可，或工具栏麦克风按钮），按住说话、松开识别、上滑取消。
-- 语音识别完全在本机进行，不联网、不上传录音。
-- 可选的「智能校对」功能会用你自行配置的 OpenAI 兼容接口（Base URL / API Key / 模型）对识别文本做一次修正，**默认关闭**；开启后，识别出的文本会发送到你配置的服务端。
-- 安装包体积：由于内置了 sherpa-onnx 的本地推理库，各架构的安装包会增大数 MB（具体数字见 [`doc/voice-input-design.md`](doc/voice-input-design.md)）；识别模型本身不随安装包分发，需要另行下载。
+- 提供两个 SenseVoice-Small int8 版本，均取自 sherpa-onnx 官方的 [`asr-models`](https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models) 发布：**2024-07-17**（会输出标点，默认）与 **2025-09-09**（加训粤语数据，但不输出标点）。
+- 下载在后台进行，可跨应用重启续传，并实时显示进度；压缩包的 SHA-256 已内置校验。
+- GitHub 的 release 资源在国内常常连不上，因此下载会自动回退到公共 GitHub 镜像；你也可以填自定义下载地址。
+- 也支持**从本地文件导入模型**（`.tar.bz2` 或 `.zip`），以及删除已安装模型来释放磁盘空间。
 
-设计与实现细节见 [`doc/voice-input-design.md`](doc/voice-input-design.md) 与 [`doc/voice-input-implementation-plan.md`](doc/voice-input-implementation-plan.md)。
+### 可选的「智能校对」——默认关闭
 
-## 沿革
+识别出的文本可以再经过一个**你自己配置的 OpenAI 兼容接口**（服务地址、API 密钥、模型、温度、超时，以及可自定义的提示词）做一次修正，用来处理同音字、口头禅和标点。
 
-TRIME 是 Tongwen RIME 或是 ThaeRvInputMEthod 的缩写:
+- **默认关闭，而且这是本项目在听写链路上唯一的出网点。** 一旦开启，识别出的文本——不是录音——会被发送到*你所配置的*服务端。
+- 任何失败、超时或截断都会**回退到原始识别文本**，校对永远不会把你说的话弄丢。
+- 设置页里有「测试校对」按钮，把配置错误暴露在配置的时候，而不是听写到一半的时候。
+- 一个需要直说的取舍：API 密钥保存在普通的应用偏好设置里，没有放进硬件密钥库。
 
-- 最初，输入法是写给[泰如拼音](http://taerv.nguyoeh.com/ime/)（tae5 rv2）的，中文名为“泰如输入法”;
-- 然后，添加了吴语等方言码表，做成了一个输入法平台，更名为“汉字方言输入法”;
-- 后来，兼容了五笔、两笔等形码，在太空卫士、征羽的建议下，更名为“[同文输入法平台 2.x](https://github.com/osfans/trime-legacy)”。寓意音码形码同台，方言官话同文。
-- 之后，借助 JNI 技术，享受了 [librime](https://github.com/rime/librime) 的成果，升级为“同文输入法平台 3.x”，简称“同文输入法”。
+### 顺带修的构建问题
 
-现在欢迎你前来[贡献](CONTRIBUTING.md) ～！
+- 为 rime-lua 固定 `_FILE_OFFSET_BITS=32`，使 32 位 Android ABI 恢复可编译。
+- 发布版 APK 归档文件名带上版本号，方便管理本地构建产物。
 
-## 开发入门
+## 语音输入上手
 
-### 准备
+1. **开启**：设置 →「**语音输入**」→ 打开开关。
+2. 在同一页面**下载识别模型**（约 160 MB），或导入你已有的模型。
+3. 按提示**授予麦克风权限**。
+4. **开始用**：默认主题下**长按空格键**即可，工具栏的麦克风按钮同样可用。
+   按住说话、松手识别、**上滑取消**。更习惯点按？设置 → 语音输入 →「触发方式」→「点按切换」。
 
-#### 开发环境要求
+任意键位都能触发——在主题里把它的 `send` 绑定为 `VOICE_ASSIST`：
 
-- Android SDK 和 Android NDK
-  - 如果还不熟悉 Android 开发，建议安装 [Android Studio](https://developer.android.google.cn/studio)，它会自动安装并配置 Android 开发环境。
+```yaml
+space:
+  click: space
+  long_click: { send: VOICE_ASSIST }
+```
 
-- JDK（OpenJDK）17
-- Python 3 (用于给 OpenCC 生成词典文本文件）
+详细绑定说明见 [`doc/Keyboard.md`](doc/Keyboard.md)。
 
-#### Windows 上的前提条件
+> 语音输入**关闭**时，语音键的行为与上游完全一致：切换到系统语音输入法。
 
-当前构建配置会使构建过程中创建符号链接，开发者需要：
+### 代价，如实说明
 
-- 启用[开发者模式](https://learn.microsoft.com/zh-cn/windows/apps/get-started/enable-your-device-for-development) 以在无管理员权限的情况下创建符号链接。
+内置 sherpa-onnx 的推理运行时，会让安装后的应用体积增加大约 **arm64-v8a 25 MB**、**armeabi-v7a 18 MB**（未压缩的原生库；下载增量小于此数）。识别模型**不随安装包分发**，就是那个另外下载的约 160 MB 文件，存放在应用的外部文件目录里。
 
-- 启用 `git` 的符号链接支持：
+### 设计文档
 
-  ```powershell
-  git config --global core.symlinks true
-  ```
+这个功能是先设计后实现的，文档都在仓库里：
 
-如果无法或者不想启用上述设置也没关系。构建系统会自动在符号链接创建失败时使用复制代替。
+- [`doc/voice-input/voice-input-design.md`](doc/voice-input/voice-input-design.md) —— 目标、非目标、技术选型、隐私模型
+- [`doc/voice-input/voice-input-implementation-plan.md`](doc/voice-input/voice-input-implementation-plan.md) —— 实施任务拆解
+- [`doc/voice-input/voice-input-feedback-design.md`](doc/voice-input/voice-input-feedback-design.md) —— 键盘内状态行的重设计
+- [`doc/voice-input/voice-input-review-2026-09-05.md`](doc/voice-input/voice-input-review-2026-09-05.md) —— 设计与实现复核
 
-### 构建
+## 构建
 
-#### 1. 克隆此项目并拉取所有子模块。
+与上游相同（环境要求与故障排除见 [README_upstream_sc.md](README_upstream_sc.md)），只是仓库地址换成本项目：
 
 ```sh
-git clone git@github.com:osfans/trime.git
-git submodule update --init --recursive
-# 可以使用部分克隆节约时间
+git clone git@github.com:oyasmi/trime.git
+cd trime
 git submodule update --init --recursive --filter=blob:none
+
+make debug      # Linux/macOS；Windows 上执行 .\gradlew assembleDebug
 ```
 
-#### 2. 编译调试版本:
-
-```sh
-# On Linux or macOS
-make debug
-
-# On Windows
-.\gradlew assembleDebug
-```
-
-#### 3. 编译正式版本：
-
-请创建 `keystore.properties` 文件，包含以下内容，注明[签名信息](https://developer.android.com/studio/publish/app-signing.html)：
-
-```gradle.properties
-storePassword=myStorePassword
-keyPassword=mykeyPassword
-keyAlias=myKeyAlias
-storeFile=myStoreFileLocation
-```
-
-然后执行：
-
-```sh
-# On Linux or macOS
-make release
-
-# On Windows
-.\gradlew assembleRelease
-```
-
-### 故障排除
-
-```
-Target "boost_log_setup" links to target "Boost::coroutine" but the target was not found.
-```
-
-在 Linux 或 macOS 上执行 `make clean`，Windows 上执行 `.\gradlew clean`。
-
-其他问题:
-
-1. 首先尝试 `make clean`
-2. 确保你的仓库与最新版本一致。如果你修改了一个或更多的子模块，请确保它们与当前仓库版本兼容。
-3. 如果问题依然存在（不太可能）, 尝试进行一次新的克隆。
-4. 检查是否有 PR/issue 与你的问题相关。 如果有的话，尝试他们的解决方案。
-5. 如果以上方法都不工作，你可以提一个 issue 来寻求帮助(可选)。
+sherpa-onnx 的 AAR **没有**提交进 git。一个 Gradle 插件（`build-logic/.../SherpaOnnxPlugin.kt`）会在首次构建时下载指定版本、校验 SHA-256 并解压到 `app/libs/`——和上游处理 OpenCC 数据的做法一致。
 
 ## 鸣谢
 
-- 开发：[osfans](https://github.com/osfans)
-- 贡献：[boboIqiqi](https://github.com/boboIqiqi)、[Bambooin](https://github.com/Bambooin)、[senchi96](https://github.com/senchi96)、[heiher](https://github.com/heiher)、[abay](https://github.com/a342191555)、[iovxw](https://github.com/iovxw)、[huyz-git](https://github.com/huyz-git)、[tumuyan](https://github.com/tumuyan)、[WhiredPlanck](https://github.com/WhiredPlanck)、[nopdan](https://github.com/nopdan)......
-- [维基](https://github.com/osfans/trime/wiki)：[xiaoqun2016](https://github.com/xiaoqun2016)、[boboIqiqi](https://github.com/boboIqiqi)......
-- 翻译：天真可爱的满满（繁体中文）、点解（英文）......
-- 键盘：天真可爱的满满、皛筱晓小笨鱼、吴琛 11、熊猫阿 Bo、默默ㄇㄛ ˋ......
-- 捐赠：[Releases](https://github.com/osfans/trime/releases) 中的“打赏”实时更新
-- 社区：在 [Issues](https://github.com/osfans/trime/issues)、[QQ 群 (811142286)](https://jq.qq.com/?_wv=1027&k=AXdR80HN)、[QQ 群 (224230445)](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=pg_q7UVumWYLq1Rk8kIAqkK1xGt64VnX&authKey=04m9l7OBO5H5vgrEL8IbpsmtnptWM60xy%2FUwYCfyvw9VcRhe8zRzAS1ezoemZdFr&noverify=0&group_code=224230445)、[Google Play](https://play.google.com/store/apps/details?id=com.osfans.trime)、[贴吧](http://tieba.baidu.com/f?kw=rime)、[Telegram](https://t.me/trime_dev) 中反馈意见的网友
-- 项目：[RIME]、[OpenCC]、[注音仓颉输入法]等开源项目
+- **[osfans/trime](https://github.com/osfans/trime)** 及其全体贡献者——本 fork 是他们的成果加上一个功能而已。完整鸣谢见 [README_upstream_sc.md](README_upstream_sc.md#鸣谢)。
+- **[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)**（[k2-fsa](https://github.com/k2-fsa)）——让离线听写成为可能的端侧语音识别运行时，本项目使用的预编译 Android AAR 与模型发布也都来自它。**没有它就没有这个功能。**
+- **[SenseVoice](https://github.com/FunAudioLLM/SenseVoice)**（[FunAudioLLM](https://github.com/FunAudioLLM)）——识别模型。
+- **[RIME]** 与 **[OpenCC]** ——同文输入法自身的基石。
 
 ## 第三方库
 
-- [Boost C++ Libraries](https://www.boost.org/) (Boost Software License)
-- [darts-clone](https://github.com/s-yata/darts-clone) (New BSD License)
-- [LevelDB](https://github.com/google/leveldb) (New BSD License)
-- [libiconv](https://www.gnu.org/software/libiconv/) (LGPL License)
-- [marisa-trie](https://github.com/s-yata/marisa-trie) (BSD License)
-- [glog](https://github.com/google/glog) (New BSD License)
-- [OpenCC](https://github.com/BYVoid/OpenCC) (Apache License 2.0)
-- [RIME](https://rime.im) (BSD License)
-- [snappy](https://github.com/google/snappy)(BSD License)
-- [utfcpp](https://github.com/nemtrif/utfcpp) (Boost Software License)
-- [yaml-cpp](https://github.com/jbeder/yaml-cpp) (MIT License)
-- [注音仓颉输入法](https://code.google.com/p/android-traditional-chinese-ime/) (Apache License 2.0)
-- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache License 2.0) —— 语音输入本地识别引擎
-- Powered by [SenseVoice-Small](https://github.com/FunAudioLLM/SenseVoice)（[FunAudioLLM](https://github.com/FunAudioLLM)），模型权重适用 [FunASR Model Open Source License Agreement](https://github.com/modelscope/FunASR/blob/main/MODEL_LICENSE)
+[README_upstream_sc.md](README_upstream_sc.md#第三方库) 中列出的全部内容，另加：
 
-[注音仓颉输入法]: https://code.google.com/p/android-traditional-chinese-ime/
-[RIME]: http://rime.im
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)（Apache License 2.0）——端侧语音识别运行时，含其内置的 [ONNX Runtime](https://github.com/microsoft/onnxruntime)（MIT License）
+- [SenseVoice-Small](https://github.com/FunAudioLLM/SenseVoice) —— 模型权重，适用 [FunASR Model Open Source License Agreement](https://github.com/modelscope/FunASR/blob/main/MODEL_LICENSE)
+- [Apache Commons Compress](https://commons.apache.org/proper/commons-compress/)（Apache License 2.0）——模型压缩包解压
+
+## 许可
+
+GPL-3.0-or-later，与上游一致。参见 [LICENSE](LICENSE) 与 [PRIVACY.md](PRIVACY.md)。
+
+[RIME]: https://rime.im
 [OpenCC]: https://github.com/BYVoid/OpenCC
