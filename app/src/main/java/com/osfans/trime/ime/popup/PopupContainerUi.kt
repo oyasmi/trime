@@ -7,13 +7,13 @@ package com.osfans.trime.ime.popup
 import android.content.Context
 import android.graphics.Rect
 import android.view.View
-import com.osfans.trime.data.theme.Theme
+import com.osfans.trime.data.theme.ThemeScope
 import splitties.views.dsl.core.Ui
 import kotlin.math.roundToInt
 
 abstract class PopupContainerUi(
     override val ctx: Context,
-    val theme: Theme,
+    val scope: ThemeScope,
     val outerBounds: Rect,
     val triggerBounds: Rect,
     val onDismissSelf: PopupContainerUi.() -> Unit,
@@ -84,6 +84,9 @@ abstract class PopupContainerUi(
     abstract fun onChangeFocus(x: Float, y: Float): Boolean
 
     abstract fun onTrigger(): String?
+
+    /** Re-applies the scheme colors, as containers outlive scheme switches. */
+    open fun refreshColors() {}
 
     companion object {
         fun limitIndex(i: Int, limit: Int) = if (i < 0) {

@@ -144,10 +144,21 @@ class VoiceOverlayUi(
     }
 
     /**
-     * Resolved once, at construction. A theme switch rebuilds the whole `InputView` — and with it
-     * the DI container and this object — so there is nothing to invalidate. If `VoiceInputDelegate`
-     * ever becomes a longer-lived singleton, this needs to be re-run on theme changes.
+     * Restyles the strip in place. A *theme* switch rebuilds the whole `InputView` — and with it
+     * the DI container and this object — but a *color scheme* switch no longer does: upstream's
+     * `ThemeScope` restyles the existing view tree instead (`InputView.refreshColors`), which is
+     * why [refreshColors] exists.
      */
+    fun refreshColors() {
+        applyColors()
+        // applyPhase() short-circuits when the phase is unchanged, so force it to re-run and
+        // re-tint the icon/waveform/label with the colors applyColors() just resolved.
+        phase?.let {
+            phase = null
+            applyPhase(it)
+        }
+    }
+
     private fun applyColors() {
         val background = themeColor("keyboard_back_color") ?: Color.BLACK
         root.background = buildBackground(background)

@@ -61,6 +61,9 @@ class VoiceInputDelegate(
     /** The overlay's root view — added to `InputView`'s layout, see InputView.kt. */
     val root get() = overlay.root
 
+    /** Restyles the status strip after a color-scheme switch — see `InputView.refreshColors`. */
+    fun refreshColors() = overlay.refreshColors()
+
     private var session: VoiceSession? = null
     private var idleUnloadLoopStarted = false
     private var isPasswordField = false

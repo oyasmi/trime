@@ -62,6 +62,10 @@ object KeyCode {
             "Pointer_DownRight" to KeyEvent.KEYCODE_DPAD_DOWN_RIGHT,
         )
 
+    // Last-resort Android key-name lookup. It is a platform call that throws
+    // when not mocked, so tests stub it out via the injected function.
+    internal var androidKeyNameToCode: (String) -> Int = { KeyEvent.keyCodeFromString("KEYCODE_$it") }
+
     fun isStandardKey(code: Int): Boolean = code in 1 until RimeKeyMapping.SYMBOL_CODE_OFFSET
 
     fun nameToKeyCode(name: String): Int {
@@ -73,7 +77,7 @@ object KeyCode {
         RimeKeyMapping.charToCode(name)?.let { return it }
         LEGACY_NAME_TO_KEY_CODE[name]?.let { return it }
 
-        val androidCode = KeyEvent.keyCodeFromString("KEYCODE_$name")
+        val androidCode = androidKeyNameToCode(name)
         if (androidCode > 0) return androidCode
 
         val rimeCode = RimeKeyMapping.nameToKeyCode(name)

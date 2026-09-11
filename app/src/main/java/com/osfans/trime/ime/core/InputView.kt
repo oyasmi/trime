@@ -22,8 +22,8 @@ import com.osfans.trime.core.CompositionProto
 import com.osfans.trime.core.RimeMessage
 import com.osfans.trime.daemon.RimeSession
 import com.osfans.trime.data.prefs.AppPrefs
-import com.osfans.trime.data.theme.ColorManager
 import com.osfans.trime.data.theme.Theme
+import com.osfans.trime.data.theme.ThemeScope
 import com.osfans.trime.ime.bar.InputBarDelegate
 import com.osfans.trime.ime.broadcast.EnterKeyDisplayDelegate
 import com.osfans.trime.ime.broadcast.InputBroadcastReceiver
@@ -73,8 +73,8 @@ import splitties.views.imageDrawable
 class InputView(
     service: TrimeInputMethodService,
     rime: RimeSession,
-    theme: Theme,
-) : BaseInputView(service, rime, theme),
+    scope: ThemeScope,
+) : BaseInputView(service, rime, scope),
     DIAware {
     private val keyboardBackground =
         imageView {
@@ -105,7 +105,8 @@ class InputView(
     override val di = DI {
         bindInstance<InputView> { this@InputView }
         bindInstance<ContextThemeWrapper> { themedContext }
-        bindInstance<Theme> { theme }
+        bindInstance<ThemeScope> { scope }
+        bindInstance<Theme> { scope.theme }
         bindInstance<TrimeInputMethodService> { service }
         bindInstance<RimeSession> { rime }
         bindSingleton { InputBroadcaster() }
@@ -178,6 +179,17 @@ class InputView(
 
     val keyboardView: View
 
+    /** Restyles colors after a scheme switch without rebuilding the view tree. */
+    fun refreshColors() {
+        keyboardBackground.imageDrawable = scope.drawable("keyboard_background")
+        popup.refreshColors()
+        keyboardWindow.refreshColors()
+        inputBar.refreshColors()
+        preedit.refreshColors()
+        windowManager.refreshColors()
+        voice.refreshColors()
+    }
+
     init {
         // MUST call before any operation
         val receivers: List<InputBroadcastReceiver> by allInstances()
@@ -188,7 +200,7 @@ class InputView(
         // show KeyboardWindow by default
         windowManager.attachWindow(KeyboardWindow)
 
-        keyboardBackground.imageDrawable = ColorManager.getDrawable("keyboard_background")
+        keyboardBackground.imageDrawable = scope.drawable("keyboard_background")
 
         keyboardView =
             constraintLayout {
