@@ -48,11 +48,13 @@ object LlmEndpoint {
         }
         when (scheme) {
             "https" -> Unit
+
             "http" -> {
                 if (!isLoopbackOrPrivate(host)) {
                     return Result.Invalid("plain http is only allowed for loopback/private hosts")
                 }
             }
+
             else -> return Result.Invalid("unsupported scheme: $scheme")
         }
 

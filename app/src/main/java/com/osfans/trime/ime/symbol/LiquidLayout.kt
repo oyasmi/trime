@@ -9,7 +9,6 @@ import android.content.Context
 import android.widget.FrameLayout
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.setPadding
-import com.osfans.trime.data.theme.KeyActionManager
 import com.osfans.trime.data.theme.Theme
 import com.osfans.trime.data.theme.ThemeScope
 import com.osfans.trime.data.theme.model.LiquidKeyboard
@@ -67,7 +66,7 @@ class LiquidLayout(
                             isRepeatable = presetKey?.repeatable ?: false
                             onClick = {
                                 commonKeyboardActionListener.listener.onAction(
-                                    KeyActionManager.getAction(presetKeyName),
+                                    theme.resolveAction(presetKeyName),
                                 )
                             }
                         }
@@ -98,6 +97,7 @@ class LiquidLayout(
                             )
                         }
                     }
+
                     LiquidKeyboard.KeyBar.Position.TOP,
                     LiquidKeyboard.KeyBar.Position.BOTTOM,
                     -> {
@@ -158,6 +158,7 @@ class LiquidLayout(
                     },
                 )
             }
+
             LiquidKeyboard.KeyBar.Position.BOTTOM -> {
                 add(
                     root,
@@ -176,6 +177,7 @@ class LiquidLayout(
                     },
                 )
             }
+
             LiquidKeyboard.KeyBar.Position.LEFT -> {
                 add(
                     root,
@@ -194,6 +196,7 @@ class LiquidLayout(
                     },
                 )
             }
+
             LiquidKeyboard.KeyBar.Position.RIGHT -> {
                 add(
                     root,

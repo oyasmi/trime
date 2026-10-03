@@ -42,11 +42,13 @@ object VoiceModelDialog {
                     VoiceModelManager.delete(context, variant)
                     onChanged()
                 }
+
             VoiceModelManager.isDownloading(work) ->
                 builder.setNegativeButton(R.string.voice_model_download_cancel) { _, _ ->
                     VoiceModelManager.cancelDownload(context)
                     onChanged()
                 }
+
             else -> {
                 val label =
                     if (state is VoiceModelState.Failed) {
@@ -73,14 +75,19 @@ object VoiceModelDialog {
     ): String = when (state) {
         is VoiceModelState.NotInstalled ->
             context.getString(R.string.voice_model_status_not_installed)
+
         is VoiceModelState.Downloading ->
             context.getString(R.string.voice_model_status_downloading, state.percent)
+
         is VoiceModelState.Extracting ->
             context.getString(R.string.voice_model_status_extracting)
+
         is VoiceModelState.Ready ->
             context.getString(R.string.voice_model_status_ready, state.readableSize)
+
         is VoiceModelState.Invalid ->
             context.getString(R.string.voice_model_status_invalid, state.reason)
+
         is VoiceModelState.Failed ->
             if (state.reason.isBlank()) {
                 context.getString(R.string.voice_model_status_failed_unknown)

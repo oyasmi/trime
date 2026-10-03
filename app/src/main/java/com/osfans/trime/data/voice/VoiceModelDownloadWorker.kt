@@ -85,11 +85,13 @@ class VoiceModelDownloadWorker(
                     cacheFile.delete()
                     Result.failure()
                 }
+
                 runAttemptCount + 1 < MAX_ATTEMPTS -> {
                     // Keep the partial file: the next attempt resumes from it via `Range`.
                     Timber.w(t, "Voice model download failed, will retry (attempt ${runAttemptCount + 1})")
                     Result.retry()
                 }
+
                 else -> {
                     Timber.e(t, "Voice model download failed")
                     cacheFile.delete()

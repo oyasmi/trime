@@ -115,6 +115,10 @@
     <string name="exception_logcat_created">Logcat 行程已建立</string>
     <string name="about">關於</string>
     <string name="theme">鍵盤樣式</string>
+    <string name="theme_diagnostics">主題診斷</string>
+    <string name="theme_diagnostics_summary">檢查目前主題中執行階段忽略或無法解析的設定</string>
+    <string name="theme_diagnostics_no_findings">目前主題未發現問題</string>
+    <string name="theme_diagnostics_unchecked">無法對目前主題進行靜態檢查</string>
     <string name="profile">配置</string>
     <string name="virtual_keyboard">虛擬鍵盤</string>
     <string name="storage">儲存</string>
@@ -155,8 +159,6 @@
     <string name="setup__data_path_import_failed">資料夾匯入失敗</string>
     <string name="select_another_directory_to_sync">要選擇另一個資料夾進行同步嗎？</string>
     <string name="select_another_directory">選擇</string>
-    <string name="reset_data_path_cancelled_message">未選擇資料夾。外部同步需要選擇資料夾。請重新選擇，或切換為使用應用程式專屬儲存空間。</string>
-    <string name="reset_data_path_pick_again">重新選擇資料夾</string>
     <string name="data_path_not_selected">未選擇資料夾</string>
     <string name="sync_user_data_success">使用者資料同步成功</string>
     <string name="sync_user_data_success_external">使用者資料已同步到外部資料夾</string>

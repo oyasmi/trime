@@ -163,8 +163,10 @@ object VoiceModelArchive {
         if (read < 3) return null
         return when {
             header[0] == 'P'.code.toByte() && header[1] == 'K'.code.toByte() -> Format.ZIP
+
             header[0] == 'B'.code.toByte() && header[1] == 'Z'.code.toByte() && header[2] == 'h'.code.toByte() ->
                 Format.TAR_BZ2
+
             else -> null
         }
     }

@@ -112,6 +112,10 @@
     <string name="virtual_keyboard">虚拟键盘</string>
     <string name="about">关于</string>
     <string name="theme">键盘样式</string>
+    <string name="theme_diagnostics">主题诊断</string>
+    <string name="theme_diagnostics_summary">检查当前主题中运行时忽略或无法解析的设置</string>
+    <string name="theme_diagnostics_no_findings">当前主题未发现问题</string>
+    <string name="theme_diagnostics_unchecked">无法对当前主题进行静态检查</string>
     <string name="profile">配置</string>
     <string name="storage">存储</string>
     <string name="data_storage_mode">数据存储模式</string>
@@ -154,8 +158,6 @@
     <string name="setup__data_path_import_failed">数据文件夹导入失败</string>
     <string name="select_another_directory_to_sync">要选择另一个文件夹进行同步吗？</string>
     <string name="select_another_directory">选择</string>
-    <string name="reset_data_path_cancelled_message">未选择数据文件夹。外部同步需要选择文件夹。请重新选择，或切换为使用应用专属存储空间。</string>
-    <string name="reset_data_path_pick_again">重新选择文件夹</string>
     <string name="data_path_not_selected">未选择数据文件夹</string>
     <string name="sync_user_data_success">用户数据同步成功</string>
     <string name="sync_user_data_success_external">用户数据已同步到外部文件夹</string>

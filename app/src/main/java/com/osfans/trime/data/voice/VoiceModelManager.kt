@@ -80,6 +80,7 @@ object VoiceModelManager {
         if (onDisk is VoiceModelState.Ready) return onDisk
         return when (work?.state) {
             WorkInfo.State.ENQUEUED -> VoiceModelState.Downloading(0)
+
             WorkInfo.State.RUNNING -> {
                 val percent = work.progress.getInt(VoiceModelDownloadWorker.KEY_PERCENT, 0)
                 val phase = work.progress.getInt(VoiceModelDownloadWorker.KEY_PHASE, VoiceModelDownloadWorker.PHASE_DOWNLOAD)
@@ -89,10 +90,12 @@ object VoiceModelManager {
                     VoiceModelState.Downloading(percent)
                 }
             }
+
             WorkInfo.State.FAILED ->
                 VoiceModelState.Failed(
                     work.outputData.getString(VoiceModelDownloadWorker.KEY_ERROR).orEmpty(),
                 )
+
             else -> onDisk
         }
     }

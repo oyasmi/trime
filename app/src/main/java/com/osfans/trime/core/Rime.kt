@@ -9,7 +9,6 @@ import com.osfans.trime.BuildConfig
 import com.osfans.trime.data.base.DataManager
 import com.osfans.trime.data.opencc.OpenCCDictManager
 import com.osfans.trime.data.prefs.AppPrefs
-import com.osfans.trime.data.sync.ExternalSyncFallback
 import com.osfans.trime.data.sync.RimeDataSync
 import com.osfans.trime.ime.core.InlinePreeditMode
 import com.osfans.trime.util.appContext
@@ -96,15 +95,15 @@ class Rime :
 
     override suspend fun deploy(skipImport: Boolean) = RimeMaintenanceMutex.withLock {
         if (RimeDataSync.usesExternalSync()) {
-            if (!RimeDataSync.hasExternalAccess(appContext)) {
-                ExternalSyncFallback.fallbackToAppStorage(appContext)
+            if (!RimeDataSync.hasExternalAccess()) {
+                RimeDataSync.fallbackToAppStorage()
             }
         }
         if (RimeDataSync.usesExternalSync() && !skipImport) {
             val importResult =
-                RimeDataSync.importToLocal(appContext, keepNotificationUntilDeploySuccess = true)
+                RimeDataSync.importToLocal(keepNotificationUntilDeploySuccess = true)
             if (importResult.isFailure) {
-                ExternalSyncFallback.fallbackToAppStorage(appContext, importResult.exceptionOrNull())
+                RimeDataSync.fallbackToAppStorage(importResult.exceptionOrNull())
             } else {
                 Timber.i("Import finished: ${importResult.getOrNull()}")
             }
@@ -114,9 +113,11 @@ class Rime :
             if (message is RimeMessage.DeployMessage) {
                 when (message.data) {
                     RimeMessage.DeployMessage.State.Start -> Unit
+
                     RimeMessage.DeployMessage.State.Success -> {
                         deployFinished.complete(true)
                     }
+
                     RimeMessage.DeployMessage.State.Failure -> {
                         deployFinished.complete(false)
                     }
@@ -149,12 +150,12 @@ class Rime :
     override suspend fun syncUserData(): Boolean = RimeMaintenanceMutex.withLock {
         // Keep the local user data dir a fresh copy of the external tree before
         // syncing. The first sync also migrates the user databases (imported
-        // once, never synced afterwards, see UserDbMigration); every subsequent
+        // once, never synced afterwards, see RimeDataSync); every subsequent
         // sync imports incrementally (SyncIndex) before the rime maintenance
         // runs. The import progress notification is suppressed so syncing does
         // not show a deploy notification.
-        if (RimeDataSync.usesExternalSync() && RimeDataSync.hasExternalAccess(appContext)) {
-            RimeDataSync.importToLocal(appContext, showProgress = false)
+        if (RimeDataSync.usesExternalSync() && RimeDataSync.hasExternalAccess()) {
+            RimeDataSync.importToLocal(showProgress = false)
                 .onFailure { Timber.e(it, "Failed to import before user-data sync") }
         }
         // RimeSyncUserData schedules maintenance asynchronously and returns once the
@@ -188,11 +189,11 @@ class Rime :
             }
         if (!syncOk) return@withLock false
         if (!RimeDataSync.usesExternalSync()) return@withLock true
-        if (!RimeDataSync.hasExternalAccess(appContext)) {
+        if (!RimeDataSync.hasExternalAccess()) {
             Timber.w("Export skipped: no data path selected")
             return@withLock false
         }
-        RimeDataSync.exportToExternal(appContext).isSuccess
+        RimeDataSync.exportToExternal().isSuccess
     }
 
     override suspend fun processKey(
@@ -329,8 +330,10 @@ class Rime :
 
     private fun asciiTipsText(status: StatusProto): String = when {
         status.isAsciiMode -> "En"
+
         status.schemaName.isNotEmpty() && !status.schemaName.startsWith('.') ->
             status.schemaName.take(2)
+
         else -> ""
     }
 
@@ -374,6 +377,7 @@ class Rime :
                 statusCached = getRimeStatus()
                 schemaCached = RimeSchema(it.data.id)
             }
+
             is RimeMessage.OptionMessage -> {
                 // Option change won't trigger response update
                 val status = getRimeStatus()
@@ -383,27 +387,33 @@ class Rime :
                     showAsciiSwitchTips(status)
                 }
             }
+
             is RimeMessage.DeployMessage -> {
                 if (it.data == RimeMessage.DeployMessage.State.Start) {
                     OpenCCDictManager.buildOpenCCDict()
                 }
             }
+
             is RimeMessage.CompositionMessage -> {
                 val composition = it.data
                 compositionCached = composition
             }
+
             is RimeMessage.PagedCandidatesMessage -> {
                 val paged = it.data
                 paging = paged.hasPrevPage
                 hasMenu = paged.candidates.isNotEmpty()
             }
+
             is RimeMessage.BulkCandidatesMessage -> {
                 hasMenu = it.data.candidates.isNotEmpty()
             }
+
             is RimeMessage.StatusMessage -> {
                 statusCached = it.data
                 updateSchemaCached(it.data)
             }
+
             else -> {}
         }
     }
@@ -440,18 +450,25 @@ class Rime :
         }
     }
 
-    fun startup() {
-        if (!RimeDataSync.isStorageAvailable(appContext)) {
+    /**
+     * Start the native Rime dispatcher when storage is ready and the lifecycle is stopped.
+     *
+     * @return true when startup was accepted; false when storage is unavailable or the
+     * lifecycle was not stopped.
+     */
+    fun startup(): Boolean {
+        if (!RimeDataSync.isStorageAvailable()) {
             Timber.w("Skip starting rime: storage not available!")
-            return
+            return false
         }
         if (lifecycle.currentState != RimeLifecycle.State.STOPPED) {
             Timber.w("Skip starting rime: not at stopped state!")
-            return
+            return false
         }
         registerRimeMessageHandler(::handleRimeMessage)
         lifecycleRegistry.emitEvent(RimeLifecycle.Event.ON_START)
         dispatcher.start()
+        return true
     }
 
     fun finalize() {

@@ -149,14 +149,17 @@ class VoiceSession(
 
         when (classifyRecordingOutcome(samples, cancelRequested, config.maxDurationMs)) {
             DiscardReason.Cancelled, DiscardReason.TooShort -> setState(VoiceSessionState.Idle)
+
             DiscardReason.AudioFailure -> {
                 setState(VoiceSessionState.Error(ErrorReason.AudioFailure))
                 setState(VoiceSessionState.Idle)
             }
+
             DiscardReason.ReachedMax -> {
                 onMaxDurationReached()
                 recognizeAndMaybeCorrect(samples!!, config)
             }
+
             null -> recognizeAndMaybeCorrect(samples!!, config)
         }
     }

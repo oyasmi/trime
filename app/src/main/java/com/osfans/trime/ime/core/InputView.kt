@@ -134,10 +134,10 @@ class InputView(
 
     private val candidatesMode by AppPrefs.defaultInstance().candidates.mode
 
-    private val keyboardSidePadding = theme.generalStyle.keyboardPadding
-    private val keyboardSidePaddingLandscape = theme.generalStyle.keyboardPaddingLand
-    private val keyboardBottomPadding = theme.generalStyle.keyboardPaddingBottom
-    private val keyboardBottomPaddingLandscape = theme.generalStyle.keyboardPaddingLandBottom
+    private val keyboardSidePadding = theme.style.keyboardPadding
+    private val keyboardSidePaddingLandscape = theme.style.keyboardPaddingLand
+    private val keyboardBottomPadding = theme.style.keyboardPaddingBottom
+    private val keyboardBottomPaddingLandscape = theme.style.keyboardPaddingLandBottom
 
     private val keyboardSidePaddingPx: Int
         get() {
@@ -374,6 +374,7 @@ class InputView(
                     }
                 }
             }
+
             is RimeMessage.CompositionMessage -> {
                 val data = if (candidatesMode == PopupCandidatesMode.ALWAYS_SHOW) {
                     CompositionProto()
@@ -382,9 +383,11 @@ class InputView(
                 }
                 broadcaster.onCompositionUpdate(data)
             }
+
             is RimeMessage.BulkCandidatesMessage -> {
                 broadcaster.onCandidateListUpdate(it.data)
             }
+
             else -> {}
         }
         broadcastKeyAppearanceUpdate()

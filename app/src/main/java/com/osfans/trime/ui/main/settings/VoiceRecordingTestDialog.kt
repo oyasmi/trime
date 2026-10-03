@@ -99,10 +99,12 @@ object VoiceRecordingTestDialog {
                     }
                     true
                 }
+
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     recorder.requestStop()
                     true
                 }
+
                 else -> false
             }
         }

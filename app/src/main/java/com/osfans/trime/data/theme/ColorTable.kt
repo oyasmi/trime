@@ -7,7 +7,6 @@
 package com.osfans.trime.data.theme
 
 import androidx.annotation.ColorInt
-import com.osfans.trime.data.theme.model.ColorScheme
 import java.util.EnumMap
 
 /**
@@ -47,23 +46,24 @@ internal class ColorTable private constructor(
         fun isImageValue(value: String): Boolean = IMAGE_SUFFIXES.any { value.endsWith(it) }
 
         /**
-         * The first non-empty value for [key], walking
-         * scheme colors -> theme fallback_colors -> built-in fallback chains,
-         * or null when the chain is exhausted or cyclic.
+         * The first non-empty value for [key] together with the key that
+         * carries it, walking scheme colors -> theme fallback_colors ->
+         * built-in fallback chains, or null when the chain is exhausted or
+         * cyclic.
          *
-         * This mirrors the resolution rules of the color table so that keys
-         * defined only by a theme resolve exactly like built-in keys.
+         * The source key differs from [key] when the value was inherited: a
+         * theme author fixes it at the source.
          */
-        fun resolveRaw(
+        fun resolveRawSource(
             key: String,
             schemeColors: Map<String, String>,
             fallbackColors: Map<String, String>,
-        ): String? {
+        ): Pair<String, String>? {
             var current = key
             val visited = HashSet<String>()
             while (visited.add(current)) {
                 val value = schemeColors[current]
-                if (!value.isNullOrEmpty()) return value
+                if (!value.isNullOrEmpty()) return current to value
                 val fallback = fallbackColors[current]
                 if (!fallback.isNullOrEmpty()) {
                     current = fallback
@@ -80,6 +80,20 @@ internal class ColorTable private constructor(
         }
 
         /**
+         * The first non-empty value for [key], walking
+         * scheme colors -> theme fallback_colors -> built-in fallback chains,
+         * or null when the chain is exhausted or cyclic.
+         *
+         * This mirrors the resolution rules of the color table so that keys
+         * defined only by a theme resolve exactly like built-in keys.
+         */
+        fun resolveRaw(
+            key: String,
+            schemeColors: Map<String, String>,
+            fallbackColors: Map<String, String>,
+        ): String? = resolveRawSource(key, schemeColors, fallbackColors)?.second
+
+        /**
          * Builds the table for one (theme, scheme) pair.
          *
          * @param parseColor parses a color string, returning null when the
@@ -94,7 +108,7 @@ internal class ColorTable private constructor(
             val unresolvedKeys = mutableListOf<ColorKey>()
             val invalidValues = mutableListOf<ColorKey>()
             for (key in ColorKey.entries) {
-                val raw = resolveRaw(key.key, scheme.colors, fallbackColors)
+                val raw = resolveRaw(key.key, scheme, fallbackColors)
                 if (raw == null) {
                     unresolvedKeys += key
                     continue
@@ -103,7 +117,9 @@ internal class ColorTable private constructor(
                 entries[key] =
                     when {
                         isImageValue(raw) -> Value.Image(raw)
+
                         parsed != null -> Value.Color(parsed)
+
                         else -> {
                             invalidValues += key
                             Value.None

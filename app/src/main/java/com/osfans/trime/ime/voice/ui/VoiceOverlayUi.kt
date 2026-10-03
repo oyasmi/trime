@@ -183,8 +183,8 @@ class VoiceOverlayUi(
                 ColorManager.getDecorDrawable(
                     "candidate_background",
                     "candidate_border_color",
-                    context.dp(theme.generalStyle.candidateBorder),
-                    context.dp(theme.generalStyle.candidateBorderRound),
+                    context.dp(theme.style.candidateBorder),
+                    context.dp(theme.style.candidateBorderRound),
                 )
             }.getOrNull()
         // Opaque base underneath: `candidate_background` is transparent in some themes, and the
@@ -251,6 +251,7 @@ class VoiceOverlayUi(
         if (state is VoiceSessionState.Error) return
         when (state) {
             is VoiceSessionState.Idle -> hide()
+
             is VoiceSessionState.Recording -> {
                 // `start()` clears the bar history, so it must run once on entry — not on every
                 // amplitude frame (~20fps), which is what made the waveform look frozen before.
@@ -262,16 +263,19 @@ class VoiceOverlayUi(
                     waveform.updateAmplitude(state.amplitude)
                 }
             }
+
             is VoiceSessionState.Recognizing -> {
                 show()
                 waveform.stop()
                 applyPhase(Phase.RECOGNIZING)
             }
+
             is VoiceSessionState.Correcting -> {
                 show()
                 waveform.stop()
                 applyPhase(Phase.CORRECTING)
             }
+
             is VoiceSessionState.Error -> Unit
         }
     }

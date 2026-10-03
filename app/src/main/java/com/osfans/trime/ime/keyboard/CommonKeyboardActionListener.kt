@@ -19,9 +19,9 @@ import com.osfans.trime.daemon.RimeSession
 import com.osfans.trime.daemon.launchOnReady
 import com.osfans.trime.data.prefs.AppPrefs
 import com.osfans.trime.data.theme.ColorManager
-import com.osfans.trime.data.theme.KeyActionManager
-import com.osfans.trime.data.theme.LiquidData
+import com.osfans.trime.data.theme.Theme
 import com.osfans.trime.data.theme.ThemeManager
+import com.osfans.trime.data.theme.model.LiquidKeyboard
 import com.osfans.trime.ime.clipboard.ClipboardWindow
 import com.osfans.trime.ime.core.TrimeInputMethodService
 import com.osfans.trime.ime.dialog.EnabledSchemaPickerDialog
@@ -51,6 +51,7 @@ class CommonKeyboardActionListener(override val di: DI) : DIAware {
 
     private val context: ContextThemeWrapper by instance()
     private val service: TrimeInputMethodService by instance()
+    private val theme: Theme by instance()
     private val rime: RimeSession by instance()
     private val windowManager: BoardWindowManager by instance()
     private val keyboardWindow: KeyboardWindow by instance()
@@ -128,22 +129,31 @@ class CommonKeyboardActionListener(override val di: DI) : DIAware {
                         service.commitText(action.commit)
                         false
                     }
+
                     text.isNotEmpty() -> {
                         onText(text)
                         false
                     }
+
                     else -> true
                 }
 
                 if (shouldHandle) {
                     when (action.code) {
                         KeyEvent.KEYCODE_SWITCH_CHARSET -> handleSwitchCharset(action)
+
                         KeyEvent.KEYCODE_EISU -> keyboardWindow.switchKeyboard(action.select)
+
                         KeyEvent.KEYCODE_LANGUAGE_SWITCH -> handleLanguageSwitch(action)
+
                         KeyEvent.KEYCODE_FUNCTION -> handleFunctionCommand(action)
+
                         KeyEvent.KEYCODE_SETTINGS -> handleSettings(action)
+
                         KeyEvent.KEYCODE_PROG_RED -> showColorPicker()
+
                         KeyEvent.KEYCODE_MENU -> showEnabledSchemaPicker()
+
                         KeyEvent.KEYCODE_VOICE_ASSIST -> {
                             if (prefs.voice.enabled.getValue()) {
                                 // Toolbar button and any non-hold binding always behave as a
@@ -154,6 +164,7 @@ class CommonKeyboardActionListener(override val di: DI) : DIAware {
                                 switchToVoiceInputMethod()
                             }
                         }
+
                         else -> handleDefaultKeyAction(action)
                     }
                 }
@@ -214,10 +225,10 @@ class CommonKeyboardActionListener(override val di: DI) : DIAware {
                     windowManager.attachWindow(ClipboardWindow(di))
                     return
                 }
-                val liquidTagList = LiquidData.getTagList()
+                val liquidTagList = theme.liquidKeyboard.getTagList()
                 val index = liquidTagList.indexOfFirst { tag ->
                     tag.label == arg || runCatching {
-                        LiquidData.Type.valueOf(arg.uppercase())
+                        LiquidKeyboard.DataType.valueOf(arg.uppercase())
                     }.getOrNull() == tag.type
                 }
 
@@ -235,9 +246,9 @@ class CommonKeyboardActionListener(override val di: DI) : DIAware {
             }
 
             private fun handleColorScheme(arg: String) {
-                ThemeManager.activeTheme.colorSchemes
-                    .find { it.id == arg }
-                    ?.let { ColorManager.setColorScheme(it) }
+                if (arg in ThemeManager.activeTheme.presetColorSchemes) {
+                    ColorManager.setColorScheme(arg)
+                }
             }
 
             private fun handleTheme(arg: String) {
@@ -274,10 +285,12 @@ class CommonKeyboardActionListener(override val di: DI) : DIAware {
                         Timber.i("try to start maintenance via command ...")
                         rime.launchOnReady { api -> api.deploy() }
                     }
+
                     "SYNC_USER_DATA" -> {
                         Timber.i("try to sync rime user data via command ...")
                         rime.launchOnReady { api -> api.syncUserData() }
                     }
+
                     "UPDATE_CONFIG" -> {
                         Timber.i("try to update rime config via command ...")
                         rime.launchOnReady { api ->
@@ -287,6 +300,7 @@ class CommonKeyboardActionListener(override val di: DI) : DIAware {
                             }
                         }
                     }
+
                     else -> Timber.w("Unknown apply method: $arg")
                 }
             }
@@ -362,8 +376,10 @@ class CommonKeyboardActionListener(override val di: DI) : DIAware {
 
                 val modifier = when {
                     action.modifier == 0 -> KeyboardWindow.currentKeyboard.modifier
+
                     (action.modifier and KeyEvent.META_CTRL_ON) != 0 && isNavigationKey(action.code) ->
                         action.modifier or KeyboardWindow.currentKeyboard.modifier
+
                     else -> action.modifier
                 }
 
@@ -438,7 +454,7 @@ class CommonKeyboardActionListener(override val di: DI) : DIAware {
                     service.postRimeJob {
                         if (value.run { startsWith('{') && endsWith('}') }) {
                             val token = value.removeSurrounding("{", "}")
-                            onAction(KeyActionManager.getAction(token))
+                            onAction(theme.resolveAction(token))
                         } else if (!value[0].isAsciiPrintable()) {
                             service.commitText(value)
                         } else {
