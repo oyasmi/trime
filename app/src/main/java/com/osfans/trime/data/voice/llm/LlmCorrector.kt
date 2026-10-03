@@ -45,6 +45,43 @@ class LlmCorrector {
     companion object {
         /** Not user-configurable — see doc/voice-input-design.md §7; matches voice-typer's default. */
         const val DEFAULT_MAX_TOKENS = 800
+
+        /** Wraps the text to correct in tags, structurally separating it from the instructions. */
+        private fun wrap(text: String): String = "<asr_text>\n$text\n</asr_text>"
+
+        /**
+         * Few-shot examples: for small models these constrain behavior far better than textual
+         * bans inside the system prompt. The content is fixed, so it can hit an LLM prefix cache —
+         * per request only the trailing user message changes.
+         *
+         * Eight pairs of two alternating kinds, so the model doesn't learn "always return as-is":
+         * pairs 1 and 3 return their input unchanged (question- or command-shaped input is still
+         * just text to correct); the rest cover filler removal + tech-term restoration + CJK-Latin
+         * spacing + question marks, bidirectional number formatting, stutter removal + homophone
+         * fixes (contrastive "不是A，是B" kept, no translation), self-corrected slips, dictated
+         * enumerations turned into numbered lists, and trailing punctuation on word-like phrases.
+         *
+         * Inputs are written the way local ASR really emits them: TextPostProcessor drops spaces
+         * at CJK-Latin boundaries, so Chinese and Latin sit flush inside the examples.
+         *
+         * Keep verbatim in sync with voice-typer's few-shot arrays (`LLMCorrector.swift`,
+         * `LlmCorrector.cs`, `llm_client.py`) and with the rules in
+         * `res/raw/voice_correction_prompt.md`: an example inconsistent with a written rule
+         * overrides that rule.
+         */
+        private val FEW_SHOT_MESSAGES =
+            listOf(
+                "你是谁？今天天气怎么样？" to "你是谁？今天天气怎么样？",
+                "呃，瑞迪斯的缓存过期时间配置好了吗" to "Redis 的缓存过期时间配置好了吗？",
+                "帮我把这个函数重构一下，逻辑保持不变" to "帮我把这个函数重构一下，逻辑保持不变",
+                "我们3个人把这个季度的转化率提升了百分之二十五,明天下午三点半开会同步一下." to
+                    "我们三个人把这个季度的转化率提升了25%，明天下午3点半开会同步一下。",
+                "那个那个登陆页面的问题不是bug，是feature" to "那个登录页面的问题不是 bug，是 feature",
+                "我我觉得截止时间定在周三，不对，周四吧" to "我觉得截止时间定在周四吧",
+                "需要准备的材料如下，第一，身份证复印件，第二，学历证明，第三，近期照片。" to
+                    "需要准备的材料如下：\n1. 身份证复印件\n2. 学历证明\n3. 近期照片",
+                "周报。" to "周报",
+            )
     }
 
     class CorrectionException(
@@ -126,10 +163,14 @@ class LlmCorrector {
                 temperature = config.temperature,
                 maxTokens = maxOf(config.maxTokens, asrText.length * 2 + 128),
                 messages =
-                listOf(
-                    ChatMessage(role = "system", content = config.systemPrompt),
-                    ChatMessage(role = "user", content = "<asr_text>$asrText</asr_text>"),
-                ),
+                buildList {
+                    add(ChatMessage(role = "system", content = config.systemPrompt))
+                    FEW_SHOT_MESSAGES.forEach { (input, output) ->
+                        add(ChatMessage(role = "user", content = wrap(input)))
+                        add(ChatMessage(role = "assistant", content = output))
+                    }
+                    add(ChatMessage(role = "user", content = wrap(asrText)))
+                },
             )
         val requestJson = json.encodeToString(requestBody)
 

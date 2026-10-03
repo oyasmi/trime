@@ -10,6 +10,10 @@ import com.sun.net.httpserver.HttpServer
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.net.InetSocketAddress
 
 /**
@@ -73,6 +77,32 @@ class LlmCorrectorTest :
                     LlmCorrector().correct(config(baseUrl), asrText) shouldBe "应该是这样的"
                 }
             }
+        }
+
+        "sends the fixed few-shot pairs between the system prompt and the wrapped user text" {
+            var capturedBody: String? = null
+            withServer(
+                { exchange ->
+                    capturedBody = exchange.requestBody.bufferedReader().use { it.readText() }
+                    jsonResponse(
+                        exchange,
+                        200,
+                        """{"choices":[{"message":{"content":"应该是这样的"},"finish_reason":"stop"}]}""",
+                    )
+                },
+            ) { baseUrl ->
+                runBlocking {
+                    LlmCorrector().correct(config(baseUrl), asrText) shouldBe "应该是这样的"
+                }
+            }
+            val messages = Json.parseToJsonElement(capturedBody!!).jsonObject["messages"]!!.jsonArray
+            // system + 8 fixed few-shot pairs (a cacheable prefix) + the actual user text
+            messages.size shouldBe 18
+            messages.first().jsonObject["role"]!!.jsonPrimitive.content shouldBe "system"
+            messages.first().jsonObject["content"]!!.jsonPrimitive.content shouldBe "correct the text"
+            messages[4].jsonObject["content"]!!.jsonPrimitive.content shouldBe "Redis 的缓存过期时间配置好了吗？"
+            messages.last().jsonObject["role"]!!.jsonPrimitive.content shouldBe "user"
+            messages.last().jsonObject["content"]!!.jsonPrimitive.content shouldBe "<asr_text>\n$asrText\n</asr_text>"
         }
 
         "strips echoed <asr_text> tags from the response" {

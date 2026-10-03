@@ -402,8 +402,9 @@ class LlmCorrector(private val config: LlmConfig) {
 
 `llm_client.py` / macOS `LLMCorrector` 的直译，**逻辑一条不改**：
 
-- system prompt = `res/raw/voice_correction_prompt.md`（voice-typer 的 `correction.md` 原样搬运），用户可在设置里覆盖（`editText`，留空 = 用内置）。
-- user message 把待校对文本包在 `<asr_text>…</asr_text>` 里。
+- system prompt = `res/raw/voice_correction_prompt.md`（voice-typer 3.5.1 重写后的 `correction.md` 原样搬运），用户可在设置里覆盖（`editText`，留空 = 用内置）。
+- system 与 user 之间固定插入 8 组 few-shot（16 条消息，`LlmCorrector.FEW_SHOT_MESSAGES`），与 voice-typer 三端（Swift / C# / Python）逐字一致：内容固定可命中前缀缓存，每次请求只有末尾 user 消息变化；示例输入按本地 ASR 真实形态书写（中英文交界无空格，与 `TextPostProcessor` 的清洗一致）。
+- user message 把待校对文本包在 `<asr_text>\n…\n</asr_text>` 里（换行与 voice-typer 的 `wrap` 一致）。
 - `max_tokens = max(配置值, 原文长度 * 2 + 128)`，防长听写被截断。
 - `finish_reason == "length"` → **放弃修正，返回原文**。
 - 防御性剥离模型回显的 `<asr_text>` 标签。
@@ -636,7 +637,7 @@ P2 之所以先用"设置页里的录音测试"驱动，是因为它把**识别�
 | D6 | 校对失败一律用 ASR 原文上屏 | 绝不因为增强功能失败而丢掉用户说的话 |
 | D7 | 录音 UI 用 InputView 上的穿透浮层，不用 BoardWindow | BoardWindow 切换会给按住中的按键发 `ACTION_CANCEL`，长按当场断掉 |
 | D8 | 复用既有 `KEYCODE_VOICE_ASSIST` 而不是发明新 keycode | 主题 YAML 无需新语法，且天然兼容"没开语音功能就切系统语音输入法"的旧行为 |
-| D9 | 校对提示词从 voice-typer 原样搬运 | 已打磨过的资产，重写只会退化 |
+| D9 | 校对提示词与 few-shot 从 voice-typer 原样搬运 | 已打磨过的资产，重写只会退化 |
 | D10 | 语音代码全部收进 `ime/voice` + `data/voice`，上游文件改动限制在 8 处 | 这是一个要长期跟随 upstream 的 fork |
 
 ---
