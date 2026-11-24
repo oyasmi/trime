@@ -18,8 +18,6 @@ import com.osfans.trime.data.voice.TextPostProcessor
 import com.osfans.trime.data.voice.VoiceModelManager
 import com.osfans.trime.data.voice.VoicePrefs
 import com.osfans.trime.ime.voice.AudioRecorder
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import splitties.dimensions.dp
 
@@ -46,16 +44,14 @@ object VoiceRecordingTestDialog {
                 addView(holdButton)
             }
 
-        val engine by lazy { SenseVoiceEngine.shared(context) }
+        val engine = SenseVoiceEngine(context.applicationContext)
         val recorder = AudioRecorder()
-        var testJob: Job? = null
 
         holdButton.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    if (testJob?.isActive == true) return@setOnTouchListener true
                     statusView.text = context.getString(R.string.voice_state_listening)
-                    testJob = scope.launch {
+                    scope.launch {
                         val variant = prefs.modelVariant.getValue()
                         if (!VoiceModelManager.isReady(context, variant)) {
                             statusView.text = context.getString(R.string.voice_model_not_ready_error)
@@ -82,10 +78,7 @@ object VoiceRecordingTestDialog {
                                     prefs.language.getValue().code,
                                     prefs.itn.getValue(),
                                     prefs.numThreads.getValue(),
-                                    unloadAfter = prefs.keepAliveMinutes.getValue() == 0,
                                 )
-                            } catch (t: CancellationException) {
-                                throw t
                             } catch (t: Exception) {
                                 statusView.text = context.getString(R.string.voice_engine_error, t.message ?: "?")
                                 return@launch
@@ -120,10 +113,10 @@ object VoiceRecordingTestDialog {
             .Builder(context)
             .setTitle(R.string.voice_recording_test)
             .setView(layout)
-            .setNegativeButton(android.R.string.cancel, null)
+            .setNegativeButton(android.R.string.cancel) { _, _ -> recorder.requestStop() }
             .setOnDismissListener {
                 recorder.requestStop()
-                testJob?.cancel()
+                scope.launch { engine.unloadNow() }
             }.show()
     }
 }

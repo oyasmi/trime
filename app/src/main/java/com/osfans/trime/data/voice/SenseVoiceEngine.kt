@@ -6,20 +6,16 @@
 package com.osfans.trime.data.voice
 
 import android.content.Context
-import android.os.SystemClock
 import com.k2fsa.sherpa.onnx.FeatureConfig
 import com.k2fsa.sherpa.onnx.OfflineModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
 import com.k2fsa.sherpa.onnx.OfflineSenseVoiceModelConfig
-import com.osfans.trime.data.prefs.AppPrefs
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -37,22 +33,28 @@ import java.io.File
  * All state is guarded by [mutex]: loading and inference never run concurrently, matching
  * sherpa-onnx's single-threaded-per-recognizer expectation.
  *
- * The engine runs model construction, inference and release on [Dispatchers.Default] with the
- * mutex held. A synchronous JNI call runs to completion even if its caller is cancelled.
+ * Model construction, the synchronous JNI `decode`, and `release` are all CPU/IO-bound blocking
+ * calls that must never touch the IME's main thread (the caller's `lifecycleScope` runs on
+ * `Dispatchers.Main.immediate`), so every public entry point here hops onto [Dispatchers.Default]
+ * before taking [mutex]. A `withTimeoutOrNull` around [decode] only stops the caller waiting — the
+ * native call keeps running to completion on the background thread and the mutex stays held until
+ * it returns, which is what prevents a timed-out decode from racing a fresh one or an early
+ * `release()`.
  */
 interface RecognitionEngine {
-    /** Decodes mono 16 kHz [samples] and releases the model before returning if [unloadAfter] is set. */
+    /** Runs one offline recognition pass over [samples] (mono, 16kHz, range roughly -1..1). */
     suspend fun decode(
         samples: FloatArray,
         variant: VoiceModelVariant,
         language: String,
         itn: Boolean,
         numThreads: Int,
-        unloadAfter: Boolean,
     ): String
+
+    suspend fun unloadNow()
 }
 
-class SenseVoiceEngine private constructor(
+class SenseVoiceEngine(
     private val context: Context,
 ) : RecognitionEngine {
     sealed interface State {
@@ -77,16 +79,16 @@ class SenseVoiceEngine private constructor(
 
     private var recognizer: OfflineRecognizer? = null
 
-    private var lastUseAtMs: Long = SystemClock.elapsedRealtime()
+    @Volatile
+    private var lastUseAtMs: Long = System.currentTimeMillis()
 
-    // Preferences and installed files can change while the shared recognizer is cached.
+    // The config a currently-loaded recognizer was built with; used to detect that a preference
+    // change (language/ITN/thread count/model variant) requires a rebuild.
     private data class LoadedConfig(
         val variant: VoiceModelVariant,
         val language: String,
         val itn: Boolean,
         val numThreads: Int,
-        val modelModifiedAt: Long,
-        val tokensModifiedAt: Long,
     )
 
     private var loadedConfig: LoadedConfig? = null
@@ -98,10 +100,8 @@ class SenseVoiceEngine private constructor(
         itn: Boolean,
         numThreads: Int,
     ) = withContext(Dispatchers.Default) {
-        mutex.withLock {
-            ensureLoadedLocked(variant, language, itn, numThreads)
-            lastUseAtMs = SystemClock.elapsedRealtime()
-        }
+        mutex.withLock { ensureLoadedLocked(variant, language, itn, numThreads) }
+        Unit
     }
 
     override suspend fun decode(
@@ -110,52 +110,53 @@ class SenseVoiceEngine private constructor(
         language: String,
         itn: Boolean,
         numThreads: Int,
-        unloadAfter: Boolean,
     ): String = withContext(Dispatchers.Default) {
         mutex.withLock {
+            val engine = ensureLoadedLocked(variant, language, itn, numThreads)
+            val stream = engine.createStream()
             try {
-                val engine = ensureLoadedLocked(variant, language, itn, numThreads)
-                val stream = engine.createStream()
-                try {
-                    stream.acceptWaveform(samples, SAMPLE_RATE)
-                    engine.decode(stream)
-                    engine.getResult(stream).text
-                } finally {
-                    stream.release()
-                }
+                stream.acceptWaveform(samples, SAMPLE_RATE)
+                engine.decode(stream)
+                engine.getResult(stream).text
             } finally {
-                lastUseAtMs = SystemClock.elapsedRealtime()
-                if (unloadAfter) unloadLocked()
+                stream.release()
             }
         }
     }
 
-    private fun unloadLocked() {
-        recognizer?.release()
-        recognizer = null
-        loadedConfig = null
-        _state.value = State.Unloaded
+    override suspend fun unloadNow() {
+        withContext(Dispatchers.Default) {
+            mutex.withLock {
+                recognizer?.release()
+                recognizer = null
+                loadedConfig = null
+                _state.value = State.Unloaded
+            }
+        }
     }
 
     /**
-     * Releases a cached model after the configured idle time. A negative delay keeps it resident.
-     * [decode] handles release at the end of a session; the loop also observes changes to the
-     * preference while the model is already idle.
+     * Runs forever (until the caller's coroutine is cancelled), unloading the engine after
+     * [minutesProvider] minutes without a [decode]/[preload] call. `<= 0` disables idle
+     * unloading here — `0` ("unload immediately after each session") is instead handled by the
+     * caller (`VoiceSession`) calling [unloadNow] right after it gets a result, since that's a
+     * one-shot action, not a background poll.
      */
-    private suspend fun runIdleUnloadLoop(minutesProvider: () -> Int) {
+    suspend fun runIdleUnloadLoop(minutesProvider: () -> Int) {
         val pollIntervalMs = 30_000L
         while (true) {
             val minutes = minutesProvider()
-            if (minutes < 0) {
+            if (minutes <= 0) {
                 delay(pollIntervalMs)
                 continue
             }
-            val remaining = mutex.withLock {
-                val waitMs = minutes * 60_000L - (SystemClock.elapsedRealtime() - lastUseAtMs)
-                if (waitMs <= 0 && recognizer != null) unloadLocked()
-                waitMs
+            val remaining = minutes * 60_000L - (System.currentTimeMillis() - lastUseAtMs)
+            if (remaining <= 0) {
+                unloadNow()
+                delay(pollIntervalMs)
+            } else {
+                delay(remaining.coerceAtMost(pollIntervalMs))
             }
-            delay(if (remaining <= 0) pollIntervalMs else remaining.coerceAtMost(pollIntervalMs))
         }
     }
 
@@ -165,16 +166,17 @@ class SenseVoiceEngine private constructor(
         itn: Boolean,
         numThreads: Int,
     ): OfflineRecognizer {
-        val dir = VoiceModelManager.modelDir(context, variant)
-        val modelFile = File(dir, VoiceModelVariant.MODEL_FILE_NAME)
-        val tokensFile = File(dir, VoiceModelVariant.TOKENS_FILE_NAME)
-        val wanted = LoadedConfig(variant, language, itn, numThreads, modelFile.lastModified(), tokensFile.lastModified())
+        lastUseAtMs = System.currentTimeMillis()
+        val wanted = LoadedConfig(variant, language, itn, numThreads)
         recognizer?.let { if (loadedConfig == wanted) return it }
 
         recognizer?.release()
         recognizer = null
         _state.value = State.Loading
 
+        val dir = VoiceModelManager.modelDir(context, variant)
+        val modelFile = File(dir, VoiceModelVariant.MODEL_FILE_NAME)
+        val tokensFile = File(dir, VoiceModelVariant.TOKENS_FILE_NAME)
         if (!modelFile.exists() || !tokensFile.exists()) {
             val reason = "model not installed"
             _state.value = State.Failed(reason)
@@ -217,17 +219,5 @@ class SenseVoiceEngine private constructor(
 
     companion object {
         const val SAMPLE_RATE = 16_000
-
-        @Volatile
-        private var sharedEngine: SenseVoiceEngine? = null
-
-        fun shared(context: Context): SenseVoiceEngine = sharedEngine ?: synchronized(this) {
-            sharedEngine ?: SenseVoiceEngine(context.applicationContext).also { engine ->
-                sharedEngine = engine
-                CoroutineScope(Dispatchers.Default).launch {
-                    engine.runIdleUnloadLoop { AppPrefs.defaultInstance().voice.keepAliveMinutes.getValue() }
-                }
-            }
-        }
     }
 }

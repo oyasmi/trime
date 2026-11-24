@@ -6,11 +6,9 @@
 package com.osfans.trime.ime.voice
 
 import android.annotation.SuppressLint
-import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import android.os.Build
 import com.osfans.trime.data.voice.SenseVoiceEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -30,7 +28,8 @@ interface VoiceRecorder {
      *   of start-up latency, and a waveform that animates before that point makes it look like
      *   the app isn't actually listening yet.
      * @param onAmplitude invoked with a roughly 0..1 amplitude, throttled to ~20fps.
-     * @return the recorded samples (range roughly -1..1), or `null` if audio capture fails.
+     * @return the recorded samples (range roughly -1..1), or `null` if the microphone couldn't
+     *   be opened at all (permission denied, device busy, …).
      */
     suspend fun record(
         maxDurationMs: Long,
@@ -46,9 +45,7 @@ interface VoiceRecorder {
  * A single [record] call is meant to back exactly one voice input session: launch it in a
  * coroutine, call [requestStop] from the gesture-release handler, and await its result.
  */
-class AudioRecorder(
-    private val attributionContext: Context? = null,
-) : VoiceRecorder {
+class AudioRecorder : VoiceRecorder {
     @Volatile
     private var stopRequested = false
 
@@ -92,34 +89,37 @@ class AudioRecorder(
             val maxSamples = (maxDurationMs * sampleRate / 1000L).toInt()
             val samples = FloatArray(maxSamples)
             var writeIndex = 0
-            val readBuffer = ShortArray(sampleRate / 50)
-            val amplitudeWindow = readBuffer.size * 3
-            var amplitudeSamples = 0
-            var sumSquares = 0.0
+            var firstSampleReported = false
+            var lastAmplitudeReportAtMs = 0L
+            val readBuffer = ShortArray(bufferBytes / 2)
 
             try {
                 audioRecord.startRecording()
-                if (audioRecord.recordingState != AudioRecord.RECORDSTATE_RECORDING) return@withContext null
                 while (!stopRequested && writeIndex < maxSamples) {
                     // Cooperate with coroutine cancellation (`sessionJob.cancel()` on an explicit
                     // cancel): without this the loop only ever stops on `stopRequested` or the
                     // time cap, so a cancelled session's microphone stayed open until then.
                     currentCoroutineContext().ensureActive()
-                    val count = minOf(readBuffer.size, maxSamples - writeIndex, amplitudeWindow - amplitudeSamples)
-                    val n = audioRecord.read(readBuffer, 0, count)
-                    if (n <= 0) return@withContext null
-                    if (writeIndex == 0) onFirstSample()
+                    val n = audioRecord.read(readBuffer, 0, readBuffer.size)
+                    if (n <= 0) break
 
-                    for (i in 0 until n) {
+                    if (!firstSampleReported) {
+                        firstSampleReported = true
+                        onFirstSample()
+                    }
+
+                    var sumSquares = 0.0
+                    val countToCopy = n.coerceAtMost(maxSamples - writeIndex)
+                    for (i in 0 until countToCopy) {
                         val f = readBuffer[i] / 32768f
                         samples[writeIndex++] = f
                         sumSquares += f.toDouble() * f.toDouble()
                     }
-                    amplitudeSamples += n
-                    if (amplitudeSamples == amplitudeWindow) {
-                        onAmplitude(sqrt(sumSquares / amplitudeSamples).toFloat())
-                        amplitudeSamples = 0
-                        sumSquares = 0.0
+                    val now = System.currentTimeMillis()
+                    if (now - lastAmplitudeReportAtMs >= 50) {
+                        lastAmplitudeReportAtMs = now
+                        val rms = sqrt(sumSquares / n).toFloat()
+                        onAmplitude(rms.coerceIn(0f, 1f))
                     }
                 }
             } finally {
@@ -136,20 +136,7 @@ class AudioRecorder(
         sampleRate: Int,
         bufferBytes: Int,
     ): AudioRecord? = try {
-        val record = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && attributionContext != null) {
-            AudioRecord.Builder()
-                .setContext(attributionContext)
-                .setAudioSource(audioSource)
-                .setAudioFormat(
-                    AudioFormat.Builder()
-                        .setSampleRate(sampleRate)
-                        .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
-                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .build(),
-                )
-                .setBufferSizeInBytes(bufferBytes)
-                .build()
-        } else {
+        val record =
             AudioRecord(
                 audioSource,
                 sampleRate,
@@ -157,7 +144,6 @@ class AudioRecorder(
                 AudioFormat.ENCODING_PCM_16BIT,
                 bufferBytes,
             )
-        }
         if (record.state == AudioRecord.STATE_INITIALIZED) {
             record
         } else {

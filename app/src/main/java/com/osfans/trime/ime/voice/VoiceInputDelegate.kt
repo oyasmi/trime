@@ -52,7 +52,7 @@ class VoiceInputDelegate(
 
     private val prefs: VoicePrefs = AppPrefs.defaultInstance().voice
 
-    private val engine by lazy { SenseVoiceEngine.shared(context) }
+    private val engine by lazy { SenseVoiceEngine(context.applicationContext) }
     private val recorder by lazy { AudioRecorder() }
     private val audioFocus by lazy { AudioFocusGuard() }
     private val llmCorrector by lazy { LlmCorrector() }
@@ -65,6 +65,7 @@ class VoiceInputDelegate(
     fun refreshColors() = overlay.refreshColors()
 
     private var session: VoiceSession? = null
+    private var idleUnloadLoopStarted = false
     private var isPasswordField = false
     private var cancellingBySlide = false
 
@@ -147,6 +148,7 @@ class VoiceInputDelegate(
             return
         }
         cancellingBySlide = false
+        startIdleUnloadLoopIfNeeded()
         s.start(buildConfig(variant))
     }
 
@@ -172,6 +174,14 @@ class VoiceInputDelegate(
                     ErrorReason.Busy -> R.string.voice_toast_busy
                 }
             context.toast(messageRes)
+        }
+    }
+
+    private fun startIdleUnloadLoopIfNeeded() {
+        if (idleUnloadLoopStarted) return
+        idleUnloadLoopStarted = true
+        service.lifecycleScope.launch {
+            engine.runIdleUnloadLoop { prefs.keepAliveMinutes.getValue() }
         }
     }
 

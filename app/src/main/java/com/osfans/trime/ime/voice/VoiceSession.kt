@@ -198,14 +198,14 @@ class VoiceSession(
         val asrText =
             withTimeoutOrNull(RECOGNIZE_TIMEOUT_MS) {
                 try {
-                    engine.decode(samples, config.variant, config.language, config.itn, config.numThreads, config.unloadImmediatelyAfter)
-                } catch (t: CancellationException) {
-                    throw t
+                    engine.decode(samples, config.variant, config.language, config.itn, config.numThreads)
                 } catch (t: Exception) {
                     Timber.w(t, "Voice recognition failed")
                     null
                 }
             }
+        if (config.unloadImmediatelyAfter) engine.unloadNow()
+
         if (asrText == null) {
             setState(VoiceSessionState.Error(ErrorReason.EngineFailure))
             setState(VoiceSessionState.Idle)
