@@ -33,7 +33,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 ### 本地语音输入（核心功能）
 
-按住某个键、说话、松手，识别出的文字直接上屏到你正在输入的地方。识别全程在**本机**完成，底层是 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 运行 [SenseVoice-Small](https://github.com/FunAudioLLM/SenseVoice) 模型。不联网、不上传录音、不装第二个 App、没有后台服务、没有独立进程。
+按住某个键、说话、松手，识别出的文字直接上屏到你正在输入的地方。识别全程在**本机**完成，底层是 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 运行 [SenseVoice-Small](https://github.com/FunAudioLLM/SenseVoice) 模型。
 
 - **离线是结构性的。** 录音不出本机，也不落磁盘——它只在一次说话期间存在于内存里，随后被丢弃。在「智能校对」关闭（默认）的情况下，模型下载完成之后，本功能**不会发起任何网络请求**。
 - **默认关闭。** 你不去设置里打开它，就不会下载任何东西，不起线程、不占内存。
@@ -41,6 +41,12 @@ SPDX-License-Identifier: GPL-3.0-or-later
 - **多语言。** 中文、英语、粤语、日语、韩语，或自动识别。可选的反向文本正则化（ITN）会输出标点与规范化数字。
 - **反馈收在键盘内。** 录音状态、实时波形、以及「正在聆听 → 识别中 → 校对中」的过程，都画成键盘内的一条状态行，而不是盖住整屏的浮层——你始终看得见正在输入的那个 App。
 - **防呆与兜底。** 过短的按压被判为误触而丢弃；单段录音有可配置的时长上限（默认 60 秒，最长 300 秒）并主动收尾；密码框拒绝语音输入；音频焦点会正确归还，媒体播放能恢复。
+
+### 跨应用识别
+
+Android 12 及以上的应用可以通过 `SpeechRecognizer.createSpeechRecognizer(context, componentName)` 指定 Trime 的 `com.osfans.trime.ime.voice.SenseVoiceRecognitionService`。Turnline 的「Trime SenseVoice」选项会自动找到它。两款应用需要麦克风权限，Trime 里还需启用本地语音并安装模型。
+
+调用方需在 AndroidManifest.xml 的 `<queries>` 中声明 `android.speech.RecognitionService`。识别服务与键盘共用 Trime 进程中的 SenseVoice 推理实例。服务按调用方的麦克风权限录音，检测到停顿后返回整句文字，识别全程在本机执行。
 
 ### 模型管理
 

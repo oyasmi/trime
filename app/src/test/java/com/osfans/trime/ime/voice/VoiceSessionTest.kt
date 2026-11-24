@@ -68,7 +68,7 @@ private class FakeEngine(
     private val resultText: String = "识别结果",
     private val throwOnDecode: Boolean = false,
 ) : RecognitionEngine {
-    var unloadCount = 0
+    var unloadAfterDecode = false
         private set
     var decodeCount = 0
         private set
@@ -79,14 +79,12 @@ private class FakeEngine(
         language: String,
         itn: Boolean,
         numThreads: Int,
+        unloadAfter: Boolean,
     ): String {
         decodeCount++
+        unloadAfterDecode = unloadAfter
         if (throwOnDecode) throw RuntimeException("boom")
         return resultText
-    }
-
-    override suspend fun unloadNow() {
-        unloadCount++
     }
 }
 
@@ -354,7 +352,7 @@ class VoiceSessionTest :
             }
         }
 
-        "unloadImmediatelyAfter unloads the engine right after decoding" {
+        "unloadImmediatelyAfter requests that the engine release the model after decoding" {
             runBlocking {
                 val engine = FakeEngine(resultText = "结果")
                 val results = mutableListOf<String>()
@@ -373,7 +371,7 @@ class VoiceSessionTest :
                 session.start(defaultConfig(unloadImmediatelyAfter = true))
                 awaitUntil { results.isNotEmpty() }
 
-                engine.unloadCount shouldBe 1
+                engine.unloadAfterDecode shouldBe true
             }
         }
 
