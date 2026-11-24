@@ -20,6 +20,7 @@ class KeyActionTest :
         // The Android key-name lookup is a platform call that throws when not
         // mocked; the Rime key table is the path under test.
         beforeTest { KeyCode.androidKeyNameToCode = { 0 } }
+        afterSpec { KeyCode.androidKeyNameToCode = KeyCode.defaultAndroidKeyNameToCode }
 
         val presetKeys = ThemeTestSupport.decodeBuiltinTheme("trime.yaml").presetKeys
 
@@ -41,6 +42,15 @@ class KeyActionTest :
                     val action = plain("select_all")
                     action.code shouldBe KeyEvent.KEYCODE_A
                     action.modifier shouldBe KeyEvent.META_CTRL_ON
+                }
+            }
+            `when`("the preset sends Shift+Return") {
+                then("enter keeps the shift mask and carries no text or command") {
+                    val action = plain("CommitScriptText")
+                    action.code shouldBe KeyEvent.KEYCODE_ENTER
+                    action.modifier shouldBe KeyEvent.META_SHIFT_ON
+                    action.text shouldBe ""
+                    action.command shouldBe ""
                 }
             }
             `when`("the preset is a modifier key itself") {

@@ -9,7 +9,7 @@ package com.osfans.trime.data.theme
 import com.charleskorn.kaml.YamlMap
 import com.charleskorn.kaml.YamlNode
 import com.osfans.trime.core.Rime
-import com.osfans.trime.data.base.DataManager
+import com.osfans.trime.core.data.DataManager
 import com.osfans.trime.util.mapping
 import com.osfans.trime.util.pairs
 import com.osfans.trime.util.yamlMapOf
@@ -231,7 +231,10 @@ object ThemeLoader {
     }
 
     /** Source file of [resourceId]: the user data dir first, then the shared one. */
-    private fun findSourceFile(resourceId: String): File? = findSourceFile(resourceId, listOf(DataManager.userDataDir, DataManager.sharedDataDir))
+    private fun findSourceFile(resourceId: String): File? = findSourceFile(
+        resourceId,
+        listOf(DataManager.userDataDir, DataManager.sharedDataDir),
+    )
 
     /**
      * Source file of [resourceId] under [roots], in order. A resource id is free

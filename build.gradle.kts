@@ -16,7 +16,7 @@ plugins {
 spotless {
     kotlin {
         target("**/*.kt", "**/*.kts")
-        targetExclude("doc/**")
+        targetExclude("build-logic/convention/build/**", "doc/**")
         ktlint("1.8.0")
     }
 }

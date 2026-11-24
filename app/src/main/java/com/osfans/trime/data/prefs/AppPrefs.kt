@@ -8,8 +8,10 @@ package com.osfans.trime.data.prefs
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.annotation.Keep
+import androidx.core.content.edit
+import androidx.preference.PreferenceManager
 import com.osfans.trime.R
-import com.osfans.trime.data.sync.DataStorageMode
+import com.osfans.trime.core.data.DataStorageMode
 import com.osfans.trime.data.voice.VoicePrefs
 import com.osfans.trime.ime.candidates.compact.CompactCandidateMode
 import com.osfans.trime.ime.candidates.popup.PopupCandidatesLayout
@@ -371,12 +373,10 @@ class AppPrefs(
             const val PERIODIC_BACKGROUND_SYNC_INTERVAL = "periodic_background_sync_interval"
             const val LAST_BACKGROUND_SYNC_STATUS = "last_background_sync_status"
             const val LAST_BACKGROUND_SYNC_TIME = "last_background_sync_time"
-            const val USER_DB_MIGRATED = "profile_user_db_migrated"
         }
 
         val dataStorageMode = enum(R.string.data_storage_mode, DATA_STORAGE_MODE, DataStorageMode.EXTERNAL_SYNC)
         val externalRimeTreeUri = string(EXTERNAL_RIME_TREE_URI, "")
-        val userDbMigrated = bool(USER_DB_MIGRATED, false)
         val periodicBackgroundSync = bool(PERIODIC_BACKGROUND_SYNC, false)
         val periodicBackgroundSyncInterval = int(PERIODIC_BACKGROUND_SYNC_INTERVAL, 30)
         val lastBackgroundSyncStatus = bool(LAST_BACKGROUND_SYNC_STATUS, false)
@@ -460,5 +460,21 @@ class AppPrefs(
             IGNORE_SYSTEM_GESTURE_INSETS,
             false,
         )
+    }
+
+    fun syncToDeviceEncryptedStorage() {
+        val ctx = appContext.createDeviceProtectedStorageContext()
+        val sp = PreferenceManager.getDefaultSharedPreferences(ctx)
+        sp.edit {
+            listOf(
+                keyboard,
+                candidates,
+                clipboard,
+            ).forEach { category ->
+                category.preferenceDelegates.forEach {
+                    it.value.putValueTo(this@edit)
+                }
+            }
+        }
     }
 }

@@ -62,6 +62,11 @@ abstract class PreferenceDelegateFragment(
         }
     }
 
+    override fun onStop() {
+        AppPrefs.defaultInstance().syncToDeviceEncryptedStorage()
+        super.onStop()
+    }
+
     override fun onDestroy() {
         preferenceProvider.unregisterOnChangeListener(onValueChangeListener)
         super.onDestroy()

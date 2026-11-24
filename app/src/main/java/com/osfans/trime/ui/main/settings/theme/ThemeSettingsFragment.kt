@@ -42,4 +42,9 @@ class ThemeSettingsFragment : PreferenceDelegateFragment(ThemeManager.prefs) {
             startActivity<ThemeDiagnosticsActivity>()
         }
     }
+
+    override fun onStop() {
+        ThemeManager.syncToDeviceEncryptedStorage()
+        super.onStop()
+    }
 }

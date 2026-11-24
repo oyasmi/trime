@@ -10,7 +10,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.graphics.Color
-import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.osfans.trime.R
 import com.osfans.trime.ui.main.MainActivity
@@ -21,21 +20,18 @@ fun createNotificationChannel(
     id: String,
     name: String,
 ) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val channel =
-            NotificationChannel(
-                id,
-                name,
-                NotificationManager.IMPORTANCE_HIGH,
-            ).apply { description = id }
-        notificationManager.createNotificationChannel(channel)
-    }
+    val channel =
+        NotificationChannel(
+            id,
+            name,
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply { description = id }
+    notificationManager.createNotificationChannel(channel)
 }
 
 object DeployNotification {
     const val CHANNEL_ID = "rime-daemon"
     const val MESSAGE_ID = 2331
-    private const val PARTIAL_COPY_MESSAGE_ID = 2332
     private const val EXTERNAL_SYNC_FALLBACK_MESSAGE_ID = 2333
 
     fun ensureChannel() {
@@ -93,35 +89,8 @@ object DeployNotification {
         notificationManager.cancel(MESSAGE_ID)
     }
 
-    fun notifyPartialCopyIfNeeded(
-        failed: Int,
-        operation: String,
-    ) {
-        if (failed <= 0) return
-        ensureChannel()
-        NotificationCompat
-            .Builder(appContext, CHANNEL_ID)
-            .setContentTitle(appContext.getString(R.string.rime_daemon))
-            .setSmallIcon(R.drawable.ic_baseline_warning_24)
-            .setContentText(appContext.getString(R.string.sync_partial_copy_failure))
-            .setStyle(
-                NotificationCompat
-                    .BigTextStyle()
-                    .bigText(
-                        appContext.getString(
-                            R.string.sync_partial_copy_failure_detail,
-                            failed,
-                            operation,
-                        ),
-                    ),
-            ).setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .build()
-            .let { notificationManager.notify(PARTIAL_COPY_MESSAGE_ID, it) }
-    }
-
-    fun showExternalSyncFallback() {
-        val message = appContext.getString(R.string.external_sync_missing_tree_fallback)
+    fun promptDataPathPermissionRevoked() {
+        val message = appContext.getString(R.string.data_path_permission_revoked)
         val contentIntent =
             PendingIntent.getActivity(
                 appContext,

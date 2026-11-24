@@ -27,14 +27,14 @@ import androidx.core.view.updateLayoutParams
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.fragment.NavHostFragment
-import com.hjq.permissions.Permission
 import com.hjq.permissions.XXPermissions
+import com.hjq.permissions.permission.PermissionLists
 import com.osfans.trime.BuildConfig
 import com.osfans.trime.R
+import com.osfans.trime.core.data.UserDataManager
 import com.osfans.trime.daemon.launchOnReady
 import com.osfans.trime.data.prefs.AppPrefs
 import com.osfans.trime.data.soundeffect.SoundEffectManager
-import com.osfans.trime.data.sync.RimeDataSync
 import com.osfans.trime.databinding.ActivityMainBinding
 import com.osfans.trime.ui.setup.SetupActivity
 import com.osfans.trime.util.item
@@ -217,7 +217,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (RimeDataSync.isStorageAvailable()) {
+        if (UserDataManager.isStorageAvailable()) {
             SoundEffectManager.init()
         }
     }
@@ -233,7 +233,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkNotificationPermission() {
-        if (XXPermissions.isGranted(this, Permission.POST_NOTIFICATIONS)) {
+        val permission = PermissionLists.getPostNotificationsPermission()
+        if (XXPermissions.isGrantedPermission(this, permission)) {
             return
         } else {
             AlertDialog
@@ -244,7 +245,7 @@ class MainActivity : AppCompatActivity() {
                 .setPositiveButton(R.string.grant_permission) { _, _ ->
                     XXPermissions
                         .with(this)
-                        .permission(Permission.POST_NOTIFICATIONS)
+                        .permission(permission)
                         .request(null)
                 }.setNegativeButton(android.R.string.cancel, null)
                 .show()

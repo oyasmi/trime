@@ -291,6 +291,10 @@ class KeyboardWindow(di: DI) :
         currentKeyboardView?.invalidateAllKeys()
     }
 
+    override fun onEnterKeyLabelUpdate(label: String) {
+        cachedKeyboards.values.forEach { (_, view) -> view.invalidateAllKeys() }
+    }
+
     override fun onStartInput(info: EditorInfo) {
         val targetKeyboard =
             when (info.imeOptions and EditorInfo.IME_FLAG_FORCE_ASCII) {
@@ -392,6 +396,11 @@ class KeyboardWindow(di: DI) :
                         .listener
                         .onAction(theme.resolveAction(what))
                 }
+            }
+
+            option == "ascii_mode" && !value.value -> {
+                // 回到中文时，释放 Shift 锁定
+                activeKeyboard?.resetShift()
             }
         }
         currentKeyboardView?.invalidateAllKeys()

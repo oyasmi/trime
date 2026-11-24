@@ -61,7 +61,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.launch
-import splitties.bitflags.hasFlag
 import splitties.systemservices.clipboardManager
 import splitties.systemservices.inputMethodManager
 import timber.log.Timber
@@ -228,7 +227,20 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
                 it.data.let msg@{
                     if (it.isVirtual) {
                         when (it.value.value) {
-                            RimeKeyMapping.RimeKey_Return -> handleReturnKey()
+                            RimeKeyMapping.RimeKey_Return ->
+                                if (it.modifiers.isReturnChord()) {
+                                    sendDownUpKeyEvent(
+                                        it.value.keyCode,
+                                        it.modifiers.metaState or meta(
+                                            alt = it.modifiers.alt,
+                                            shift = it.modifiers.shift,
+                                            ctrl = it.modifiers.ctrl,
+                                            meta = it.modifiers.meta,
+                                        ),
+                                    )
+                                } else {
+                                    handleReturnKey()
+                                }
 
                             else -> {
                                 val keyCode = it.value.keyCode
@@ -333,24 +345,12 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
     }
 
     private fun handleReturnKey() {
-        currentInputEditorInfo.run {
-            if (inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_NULL ||
-                imeOptions.hasFlag(EditorInfo.IME_FLAG_NO_ENTER_ACTION)
-            ) {
-                sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER)
-                return
-            }
-            if (!actionLabel.isNullOrEmpty() && actionId != EditorInfo.IME_ACTION_UNSPECIFIED) {
-                currentInputConnection.performEditorAction(actionId)
-                return
-            }
-            when (val action = imeOptions and EditorInfo.IME_MASK_ACTION) {
-                EditorInfo.IME_ACTION_UNSPECIFIED,
-                EditorInfo.IME_ACTION_NONE,
-                -> sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER)
-
-                else -> currentInputConnection.performEditorAction(action)
-            }
+        val info = currentInputEditorInfo
+        val action = EditorEnterAction.resolve(info.inputType, info.imeOptions, info.actionId, info.actionLabel)
+        if (action == null) {
+            sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER)
+        } else {
+            currentInputConnection.performEditorAction(action)
         }
     }
 
@@ -811,13 +811,10 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
     }
 
     fun shareText(): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val ic = currentInputConnection ?: return false
-            val cs = ic.getSelectedText(0)
-            if (cs == null) ic.performContextMenuAction(android.R.id.selectAll)
-            return ic.performContextMenuAction(android.R.id.shareText)
-        }
-        return false
+        val ic = currentInputConnection ?: return false
+        val cs = ic.getSelectedText(0)
+        if (cs == null) ic.performContextMenuAction(android.R.id.selectAll)
+        return ic.performContextMenuAction(android.R.id.shareText)
     }
 
     /** 編輯操作 */
@@ -831,12 +828,10 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
             return false
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (prefs.keyboard.hookCtrlZY.getValue()) {
-                when (code) {
-                    KeyEvent.KEYCODE_Y -> return ic.performContextMenuAction(android.R.id.redo)
-                    KeyEvent.KEYCODE_Z -> return ic.performContextMenuAction(android.R.id.undo)
-                }
+        if (prefs.keyboard.hookCtrlZY.getValue()) {
+            when (code) {
+                KeyEvent.KEYCODE_Y -> return ic.performContextMenuAction(android.R.id.redo)
+                KeyEvent.KEYCODE_Z -> return ic.performContextMenuAction(android.R.id.undo)
             }
         }
 
@@ -1022,3 +1017,9 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         showingDialog = dialog
     }
 }
+
+/**
+ * A virtual Return carrying shift, control, alt, or meta is a key chord and is
+ * forwarded with the modifier keys. Caps Lock or Num Lock alone is not.
+ */
+internal fun KeyModifiers.isReturnChord(): Boolean = shift || ctrl || alt || meta
